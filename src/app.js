@@ -30,8 +30,8 @@ import preferenceRoutes from './routes/preferenceRoutes.js';
 // Load environment variables
 dotenv.config();
 
-// Connect to MongoDB
-connectDB();
+// Connect to MongoDB — catch prevents unhandled rejection crashing the process on Vercel
+connectDB().catch(err => console.error('[DB] Connection failed:', err.message));
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -128,47 +128,45 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Graceful shutdown
-const gracefulShutdown = (signal) => {
-  console.log(`\nReceived ${signal}. Starting graceful shutdown...`);
-  
-  server.close(() => {
-    console.log('HTTP server closed.');
-    
-    // Close MongoDB connection
-    mongoose.connection.close(() => {
-      console.log('MongoDB connection closed.');
-      process.exit(0);
+// Export app for Vercel serverless
+export default app;
+
+// Start server only when running locally (not on Vercel)
+if (!process.env.VERCEL) {
+  const gracefulShutdown = (signal) => {
+    console.log(`\nReceived ${signal}. Starting graceful shutdown...`);
+
+    server.close(() => {
+      console.log('HTTP server closed.');
+
+      mongoose.connection.close(() => {
+        console.log('MongoDB connection closed.');
+        process.exit(0);
+      });
     });
+
+    setTimeout(() => {
+      console.error('Could not close connections in time, forcefully shutting down');
+      process.exit(1);
+    }, 30000);
+  };
+
+  const server = app.listen(PORT, () => {
+    console.log(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+    console.log(`Health check available at: http://localhost:${PORT}/health`);
   });
-  
-  // Force close after 30 seconds
-  setTimeout(() => {
-    console.error('Could not close connections in time, forcefully shutting down');
-    process.exit(1);
-  }, 30000);
-};
 
-// Start server
-const server = app.listen(PORT, () => {
-  console.log(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-  console.log(`Health check available at: http://localhost:${PORT}/health`);
-});
+  process.on('unhandledRejection', (err) => {
+    console.error(`[UNHANDLED REJECTION] ${err.message}`);
+    server.close(() => process.exit(1));
+  });
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err) => {
-  console.error(`[UNHANDLED REJECTION] ${err.message}`);
-  // Close server & exit process
-  server.close(() => process.exit(1));
-});
+  process.on('uncaughtException', (err) => {
+    console.error(`[UNCAUGHT EXCEPTION] ${err.message}`);
+    console.error(err.stack);
+    gracefulShutdown('SIGTERM');
+  });
 
-// Handle uncaught exceptions
-process.on('uncaughtException', (err) => {
-  console.error(`[UNCAUGHT EXCEPTION] ${err.message}`);
-  console.error(err.stack);
-  gracefulShutdown('SIGTERM');
-});
-
-// Handle graceful shutdown signals
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+}

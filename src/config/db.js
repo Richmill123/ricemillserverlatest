@@ -52,6 +52,9 @@ const connectDB = async () => {
     console.error('MongoDB connection error:', error.message);
     console.error('Make sure your MongoDB server is running and accessible');
     console.error('If using MongoDB Atlas, check if your IP is whitelisted');
+    if (process.env.VERCEL) {
+      throw error;
+    }
     process.exit(1);
   }
 };
