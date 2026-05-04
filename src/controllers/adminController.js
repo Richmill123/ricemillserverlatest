@@ -101,8 +101,7 @@ const authAdmin = asyncHandler(async (req, res) => {
   const admin = await Admin.findOne({ username });
 
   if (admin && (await admin.matchPassword(password))) {
-    admin.lastLogin = new Date();
-    await admin.save({ validateBeforeSave: false });
+    await Admin.updateOne({ _id: admin._id }, { $set: { lastLogin: new Date() } });
 
     const tokens = generateTokenPair(admin._id);
 

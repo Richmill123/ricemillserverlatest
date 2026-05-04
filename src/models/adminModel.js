@@ -82,9 +82,9 @@ const adminSchema = new mongoose.Schema(
 // Hash password before saving
 adminSchema.pre('save', async function (next) {
   if (!this.isModified('password')) {
-    next();
+    return next();
   }
-  const salt = await bcrypt.genSalt(12); // Increased salt rounds for better security
+  const salt = await bcrypt.genSalt(12);
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
@@ -101,26 +101,24 @@ adminSchema.methods.matchPassword = async function (enteredPassword) {
   }
   
   const isMatch = await bcrypt.compare(enteredPassword, this.password);
-  
+
   if (!isMatch) {
-    this.loginAttempts += 1;
-    
-    // Lock account after 5 failed attempts for 2 hours
-    if (this.loginAttempts >= 5) {
-      this.lockUntil = Date.now() + 2 * 60 * 60 * 1000; // 2 hours
+    const newAttempts = this.loginAttempts + 1;
+    const update = { loginAttempts: newAttempts };
+    if (newAttempts >= 5) {
+      update.lockUntil = new Date(Date.now() + 2 * 60 * 60 * 1000);
     }
-    
-    await this.save();
+    await this.constructor.updateOne({ _id: this._id }, { $set: update });
     return false;
   }
-  
-  // Reset login attempts on successful login
+
   if (this.loginAttempts > 0) {
-    this.loginAttempts = 0;
-    this.lockUntil = undefined;
-    await this.save();
+    await this.constructor.updateOne(
+      { _id: this._id },
+      { $set: { loginAttempts: 0 }, $unset: { lockUntil: '' } }
+    );
   }
-  
+
   return true;
 };
 
