@@ -36,6 +36,9 @@ connectDB().catch(err => console.error('[DB] Connection failed:', err.message));
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust Vercel's reverse proxy so express-rate-limit can read X-Forwarded-For
+app.set('trust proxy', 1);
+
 // Security middleware (order matters!)
 app.use(helmetConfig);
 app.use(securityLogger);
