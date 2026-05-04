@@ -106,6 +106,10 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Silence noisy browser favicon requests
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+app.get('/favicon.png', (req, res) => res.status(204).end());
+
 // 404 handler with security logging
 app.use((req, res) => {
   console.warn(`[404] ${req.method} ${req.originalUrl} - IP: ${req.ip}`);

@@ -22,6 +22,9 @@ export const createRateLimit = (windowMs, max, message) => {
     message: { error: message },
     standardHeaders: true,
     legacyHeaders: false,
+    // trust proxy is set at the app level (app.set('trust proxy', 1));
+    // disable the duplicate header check to prevent ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+    validate: { xForwardedForHeader: false },
     store: {
       async increment(key) {
         const now = Date.now();
