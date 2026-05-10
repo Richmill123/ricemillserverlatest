@@ -24,23 +24,23 @@ const createAdmin = asyncHandler(async (req, res) => {
     throw new Error('Admin already exists');
   }
 
-  const slashIndex = username.indexOf('/');
-  if (slashIndex !== -1) {
-    // username is like "bbk/admin" — client ID is "bbk"
-    const clientId = username.slice(0, slashIndex);
-    const conflict = await Admin.findOne({ username: clientId });
-    if (conflict) {
-      res.status(400);
-      throw new Error(`Client ID "${clientId}" conflicts with an existing username`);
-    }
-  } else {
-    // username is plain like "bbk" — check no existing user has this as their client ID prefix
-    const conflict = await Admin.findOne({ username: new RegExp(`^${username}/`) });
-    if (conflict) {
-      res.status(400);
-      throw new Error(`Username "${username}" conflicts with an existing client ID`);
-    }
-  }
+  // const slashIndex = username.indexOf('/');
+  // if (slashIndex !== -1) {
+  //   // username is like "bbk/admin" — client ID is "bbk"
+  //   const clientId = username.slice(0, slashIndex);
+  //   const conflict = await Admin.findOne({ username: clientId });
+  //   if (conflict) {
+  //     res.status(400);
+  //     throw new Error(`Client ID "${clientId}" conflicts with an existing username`);
+  //   }
+  // } else {
+  //   // username is plain like "bbk" — check no existing user has this as their client ID prefix
+  //   const conflict = await Admin.findOne({ username: new RegExp(`^${username}/`) });
+  //   if (conflict) {
+  //     res.status(400);
+  //     throw new Error(`Username "${username}" conflicts with an existing client ID`);
+  //   }
+  // }
 
   const admin = await Admin.create({
     name,
