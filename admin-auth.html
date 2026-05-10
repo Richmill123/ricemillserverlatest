@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Rice Mill — Admin Setup</title>
+<style>
+:root {
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-glow: rgba(79,70,229,0.15);
+  --teal: #0d9488;
+  --teal-hover: #0f766e;
+  --success-bg: #dcfce7; --success-fg: #166534; --success-bd: #bbf7d0;
+  --error-bg: #fee2e2;   --error-fg: #991b1b;   --error-bd: #fca5a5;
+  --info-bg: #eff6ff;    --info-fg: #1e40af;    --info-bd: #bfdbfe;
+  --text: #111827; --muted: #6b7280; --light: #9ca3af;
+  --border: #e5e7eb; --bg: #f1f5f9; --card: #fff;
+  --shadow: 0 4px 24px rgba(0,0,0,0.08);
+  --r: 12px; --r-sm: 8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height:100vh;color:var(--text)}
+
+/* HEADER */
+header{
+  background:linear-gradient(135deg,#1e1b4b,#312e81,#4338ca);
+  height:60px;padding:0 28px;
+  display:flex;align-items:center;justify-content:space-between;
+  box-shadow:0 2px 12px rgba(0,0,0,.3);position:sticky;top:0;z-index:100;
+}
+.h-left{display:flex;align-items:center;gap:10px}
+.h-icon{width:36px;height:36px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1.1rem}
+.h-text h1{color:#fff;font-size:.95rem;font-weight:700}
+.h-text p{color:rgba(255,255,255,.55);font-size:.7rem;margin-top:1px}
+.h-badge{font-size:.7rem;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.8);padding:4px 12px;border-radius:20px}
+.h-link{font-size:.78rem;color:rgba(255,255,255,.8);text-decoration:none;padding:6px 14px;border:1px solid rgba(255,255,255,.3);border-radius:7px;transition:background .15s}
+.h-link:hover{background:rgba(255,255,255,.1)}
+
+/* TOASTS */
+#toastWrap{position:fixed;top:70px;right:16px;z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{padding:11px 14px;border-radius:10px;font-size:.84rem;font-weight:500;min-width:260px;max-width:340px;display:flex;align-items:center;gap:9px;box-shadow:0 4px 16px rgba(0,0,0,.18);pointer-events:auto;animation:tIn .28s cubic-bezier(.34,1.56,.64,1) forwards}
+.toast.out{animation:tOut .22s ease forwards}
+@keyframes tIn{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes tOut{from{transform:translateX(0);opacity:1}to{transform:translateX(110%);opacity:0}}
+.t-ok{background:#166534;color:#fff}.t-err{background:#991b1b;color:#fff}.t-info{background:#1e40af;color:#fff}
+.t-x{margin-left:auto;cursor:pointer;opacity:.7;font-size:.8rem}.t-x:hover{opacity:1}
+
+/* MAIN */
+.wrap{max-width:520px;margin:32px auto 60px;padding:0 14px}
+
+/* TAB BAR */
+.tabs{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;background:#fff;padding:5px;border-radius:14px;box-shadow:var(--shadow);margin-bottom:18px}
+.tab{padding:10px 6px;border:none;background:transparent;border-radius:10px;font-size:.79rem;font-weight:600;cursor:pointer;color:var(--muted);transition:all .2s;display:flex;align-items:center;justify-content:center;gap:5px}
+.tab.on{background:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(79,70,229,.4)}
+.tab:hover:not(.on){background:#f3f4f6;color:var(--text)}
+
+/* CARD */
+.card{background:#fff;border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.card-head{padding:20px 24px 16px;border-bottom:1px solid #f3f4f6;background:linear-gradient(135deg,#fafbff,#f5f3ff)}
+.card-head h2{font-size:1rem;font-weight:700;display:flex;align-items:center;gap:7px}
+.card-head p{font-size:.78rem;color:var(--muted);margin-top:4px;line-height:1.5}
+.card-body{padding:22px 24px 26px}
+.panel{display:none}.panel.on{display:block}
+
+/* FORM */
+.fg{margin-bottom:14px}
+.fg label{display:flex;align-items:center;gap:4px;font-size:.78rem;font-weight:600;color:#374151;margin-bottom:5px}
+.req{color:#ef4444}
+.opt{font-weight:400;color:var(--muted)}
+.iw{position:relative}
+input[type=text],input[type=email],input[type=password]{
+  width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:var(--r-sm);
+  font-size:.87rem;outline:none;background:#fafafa;color:var(--text);
+  transition:border-color .2s,box-shadow .2s,background .2s
+}
+input[type=text]:focus,input[type=email]:focus,input[type=password]:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow);background:#fff}
+input.eye-pad{padding-right:40px}
+.eye{position:absolute;right:11px;top:50%;transform:translateY(-50%);cursor:pointer;opacity:.45;font-size:.95rem;user-select:none;transition:opacity .15s}
+.eye:hover{opacity:.9}
+.hint{font-size:.71rem;color:var(--muted);margin-top:3px;line-height:1.4}
+
+/* 2-col */
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* STRENGTH */
+.strength{margin-top:6px}
+.strack{height:3px;background:#efefef;border-radius:2px;overflow:hidden}
+.sfill{height:100%;width:0;border-radius:2px;transition:width .3s,background .3s}
+.slabel{font-size:.7rem;font-weight:600;margin-top:3px}
+
+/* BUTTON */
+.btn{width:100%;padding:11px;border:none;border-radius:var(--r-sm);font-size:.88rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:transform .15s,box-shadow .15s,opacity .15s}
+.btn:active:not(:disabled){transform:scale(.98)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:0 3px 10px rgba(79,70,229,.35)}
+.btn-primary:hover:not(:disabled){background:var(--primary-hover);box-shadow:0 5px 14px rgba(79,70,229,.42);transform:translateY(-1px)}
+.btn-teal{background:var(--teal);color:#fff;box-shadow:0 3px 10px rgba(13,148,136,.3)}
+.btn-teal:hover:not(:disabled){background:var(--teal-hover);transform:translateY(-1px)}
+
+/* SPINNER */
+.spin{width:15px;height:15px;border:2.5px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:rot .65s linear infinite;flex-shrink:0}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+
+@media(max-width:520px){
+  .row2{grid-template-columns:1fr}
+  .card-body,.card-head{padding-left:16px;padding-right:16px}
+  header{padding:0 14px}
+}
+</style>
+</head>
+<body>
+<div id="toastWrap"></div>
+
+<header>
+  <div class="h-left">
+    <div class="h-icon">🌾</div>
+    <div class="h-text">
+      <h1>Rice Mill — Admin Setup</h1>
+      <p>Create accounts &amp; manage credentials</p>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <a class="h-link" href="admin-panel.html">Admin Panel →</a>
+    <span class="h-badge">No auth required</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="tabs">
+    <button class="tab on" data-tab="create" onclick="go('create')">➕ <span>Create Admin</span></button>
+    <button class="tab"    data-tab="reset"  onclick="go('reset')">🔑 <span>Reset Password</span></button>
+  </div>
+
+  <div class="card">
+
+    <!-- CREATE ADMIN -->
+    <div id="p-create" class="panel on">
+      <div class="card-head">
+        <h2>➕ Create New Admin</h2>
+        <p>Register a new admin account. No authentication required.</p>
+      </div>
+      <div class="card-body">
+        <div class="row2">
+          <div class="fg">
+            <label>Full Name <span class="req">*</span></label>
+            <input id="c_name" type="text" placeholder="e.g. Ravi Kumar" autocomplete="off"/>
+          </div>
+          <div class="fg">
+            <label>Username <span class="req">*</span></label>
+            <input id="c_user" type="text" placeholder="e.g. ravi_k" autocomplete="off"/>
+            <p class="hint">3–20 chars · letters, numbers, _</p>
+          </div>
+        </div>
+        <div class="fg">
+          <label>Email <span class="opt">(optional)</span></label>
+          <input id="c_email" type="email" placeholder="ravi@example.com" autocomplete="off"/>
+        </div>
+        <div class="fg">
+          <label>Password <span class="req">*</span></label>
+          <div class="iw">
+            <input id="c_pass" type="password" class="eye-pad" placeholder="Min 8 characters" oninput="strength(this,'cs','cl')"/>
+            <span class="eye" onclick="toggleEye('c_pass',this)">👁</span>
+          </div>
+          <div class="strength">
+            <div class="strack"><div id="cs" class="sfill"></div></div>
+            <p id="cl" class="slabel" style="color:transparent">—</p>
+          </div>
+          <p class="hint">Uppercase · lowercase · number · special char (@$!%*?&amp;)</p>
+        </div>
+        <button class="btn btn-primary" id="createBtn" onclick="doCreate()"><span>Create Admin</span></button>
+      </div>
+    </div>
+
+    <!-- RESET PASSWORD -->
+    <div id="p-reset" class="panel">
+      <div class="card-head">
+        <h2>🔑 Reset Password</h2>
+        <p>Reset any admin's password by username — no login required.</p>
+      </div>
+      <div class="card-body">
+        <div class="fg">
+          <label>Username <span class="req">*</span></label>
+          <input id="r_user" type="text" placeholder="Target admin's username" autocomplete="off"/>
+        </div>
+        <div class="fg">
+          <label>New Password <span class="req">*</span></label>
+          <div class="iw">
+            <input id="r_pass" type="password" class="eye-pad" placeholder="Min 8 characters" oninput="strength(this,'rs','rl')"/>
+            <span class="eye" onclick="toggleEye('r_pass',this)">👁</span>
+          </div>
+          <div class="strength">
+            <div class="strack"><div id="rs" class="sfill"></div></div>
+            <p id="rl" class="slabel" style="color:transparent">—</p>
+          </div>
+          <p class="hint">Uppercase · lowercase · number · special char</p>
+        </div>
+        <div class="fg">
+          <label>Confirm Password <span class="req">*</span></label>
+          <div class="iw">
+            <input id="r_confirm" type="password" class="eye-pad" placeholder="Re-enter new password"/>
+            <span class="eye" onclick="toggleEye('r_confirm',this)">👁</span>
+          </div>
+        </div>
+        <button class="btn btn-teal" id="resetBtn" onclick="doReset()"><span>Reset Password</span></button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const CONFIG = { API: 'https://rice-mill-server-latest.vercel.app' };
+const $  = id => document.getElementById(id);
+
+/* TABS */
+function go(name) {
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
+  $('p-' + name).classList.add('on');
+}
+
+/* TOAST */
+function toast(msg, type) {
+  const map = { ok:'t-ok', err:'t-err', info:'t-info' };
+  const el  = document.createElement('div');
+  el.className = 'toast ' + (map[type] || 't-info');
+  el.innerHTML = `<span style="flex:1">${msg}</span><span class="t-x" onclick="rmT(this)">✕</span>`;
+  $('toastWrap').appendChild(el);
+  setTimeout(() => rmT(el.querySelector('.t-x')), 4500);
+}
+function rmT(x) {
+  const el = x.closest ? x.closest('.toast') : x;
+  if (!el || el.classList.contains('out')) return;
+  el.classList.add('out');
+  setTimeout(() => el.remove(), 240);
+}
+
+/* EYE */
+function toggleEye(id, el) {
+  const inp = $(id);
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  el.textContent = inp.type === 'password' ? '👁' : '🙈';
+}
+
+/* STRENGTH */
+const LVL = [
+  { w:'0%',   c:'transparent', l:'' },
+  { w:'20%',  c:'#ef4444',     l:'Very Weak' },
+  { w:'40%',  c:'#f97316',     l:'Weak' },
+  { w:'60%',  c:'#f59e0b',     l:'Fair' },
+  { w:'80%',  c:'#84cc16',     l:'Good' },
+  { w:'100%', c:'#22c55e',     l:'Strong ✓' },
+];
+function strength(inp, fillId, lblId) {
+  const v = inp.value; let s = 0;
+  if (v.length >= 8)        s++;
+  if (/[A-Z]/.test(v))     s++;
+  if (/[a-z]/.test(v))     s++;
+  if (/\d/.test(v))         s++;
+  if (/[@$!%*?&]/.test(v)) s++;
+  const lv = LVL[s];
+  const f = $(fillId), l = $(lblId);
+  f.style.width = lv.w; f.style.background = lv.c;
+  l.textContent = lv.l; l.style.color = lv.c;
+}
+
+/* LOADING */
+function busy(id, on, label) {
+  const b = $(id); b.disabled = on;
+  b.innerHTML = on ? '<div class="spin"></div><span>Working…</span>' : `<span>${label}</span>`;
+}
+
+/* CREATE ADMIN */
+async function doCreate() {
+  const name     = $('c_name').value.trim();
+  const username = $('c_user').value.trim();
+  const password = $('c_pass').value;
+  const email    = $('c_email').value.trim();
+  if (!name)     { toast('Full name is required.', 'err'); return; }
+  if (!username) { toast('Username is required.', 'err'); return; }
+  if (!password) { toast('Password is required.', 'err'); return; }
+
+  busy('createBtn', true, 'Create Admin');
+  try {
+    const body = { name, username, password };
+    if (email) body.email = email;
+    const res  = await fetch(`${CONFIG.API}/api/admins`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error || 'Create failed');
+    toast(`Admin "${data.username}" created!`, 'ok');
+    ['c_name','c_user','c_pass','c_email'].forEach(id => $(id).value = '');
+    strength($('c_pass'), 'cs', 'cl');
+  } catch (e) { toast(e.message, 'err'); }
+  finally     { busy('createBtn', false, 'Create Admin'); }
+}
+
+/* RESET PASSWORD */
+async function doReset() {
+  const username    = $('r_user').value.trim();
+  const newPassword = $('r_pass').value;
+  const confirm     = $('r_confirm').value;
+  if (!username)               { toast('Username is required.', 'err'); return; }
+  if (!newPassword)            { toast('New password is required.', 'err'); return; }
+  if (newPassword !== confirm) { toast('Passwords do not match.', 'err'); return; }
+
+  busy('resetBtn', true, 'Reset Password');
+  try {
+    const res  = await fetch(`${CONFIG.API}/api/admins/reset-password`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, newPassword }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error || 'Failed');
+    toast(data.message || 'Password reset!', 'ok');
+    ['r_user','r_pass','r_confirm'].forEach(id => $(id).value = '');
+    strength($('r_pass'), 'rs', 'rl');
+  } catch (e) { toast(e.message, 'err'); }
+  finally     { busy('resetBtn', false, 'Reset Password'); }
+}
+
+/* ENTER KEY */
+[
+  [['c_name','c_user','c_pass','c_email'], doCreate],
+  [['r_user','r_pass','r_confirm'],         doReset],
+].forEach(([ids, fn]) =>
+  ids.forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') fn(); }))
+);
+</script>
+</body>
+</html>

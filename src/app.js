@@ -30,14 +30,19 @@ import preferenceRoutes from './routes/preferenceRoutes.js';
 // Load environment variables
 dotenv.config();
 
-// Connect to MongoDB — catch prevents unhandled rejection crashing the process on Vercel
-connectDB().catch(err => console.error('[DB] Connection failed:', err.message));
+// Kick off an eager connection attempt so warm instances are already connected
+connectDB().catch(err => console.error('[DB] Eager connection failed:', err.message));
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Trust Vercel's reverse proxy so express-rate-limit can read X-Forwarded-For
 app.set('trust proxy', 1);
+
+// Ensure DB is connected before every request (no-op on warm instances)
+app.use((req, res, next) => {
+  connectDB().then(() => next()).catch(next);
+});
 
 // Security middleware (order matters!)
 app.use(helmetConfig);

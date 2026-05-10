@@ -101,24 +101,22 @@ export const helmetConfig = helmet({
 // CORS configuration
 export const corsOptions = {
   origin: function (origin, callback) {
-    const allowedOrigins = process.env.ALLOWED_ORIGINS 
-      ? process.env.ALLOWED_ORIGINS.split(',')
-      : ['http://localhost:3000', 'http://localhost:4200'];
-    
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+    // Allow no-origin requests (curl, mobile) and null-origin (file:// pages)
+    if (!origin || origin === 'null') return callback(null, true);
+
+    // If ALLOWED_ORIGINS is set, enforce the whitelist; otherwise allow all
+    if (process.env.ALLOWED_ORIGINS) {
+      const allowed = process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim());
+      return callback(null, allowed.includes(origin));
     }
+
+    callback(null, true);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['X-Total-Count'],
-  maxAge: 86400 // 24 hours
+  maxAge: 86400
 };
 
 // Input validation patterns

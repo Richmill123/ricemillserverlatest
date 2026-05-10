@@ -40,12 +40,6 @@ const adminSchema = new mongoose.Schema(
         message: 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'
       }
     },
-    type: {
-      type: String,
-      enum: ['merchant_mill', 'custom_milling', 'hybrid'],
-      default: 'merchant_mill',
-      required: [true, 'Type is required'],
-    },
     active: {
       type: Boolean,
       default: true,

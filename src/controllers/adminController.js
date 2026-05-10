@@ -1,5 +1,4 @@
 import asyncHandler from 'express-async-handler';
-import crypto from 'crypto';
 import generateToken, { generateTokenPair, verifyToken } from '../utils/generateToken.js';
 import Admin from '../models/adminModel.js';
 import Order from '../models/orderModel.js';
@@ -16,7 +15,7 @@ import Purchase from '../models/purchaseModel.js';
 // @route   POST /api/admins
 // @access  Private/Admin
 const createAdmin = asyncHandler(async (req, res) => {
-  const { name, username, password, type, email, role } = req.body;
+  const { name, username, password, email } = req.body;
 
   const adminExists = await Admin.findOne({ username });
 
@@ -29,7 +28,6 @@ const createAdmin = asyncHandler(async (req, res) => {
     name,
     username,
     password,
-    type: type || 'merchant_mill',
     ...(email && { email }),
   });
 
@@ -38,7 +36,6 @@ const createAdmin = asyncHandler(async (req, res) => {
       _id: admin._id,
       name: admin.name,
       username: admin.username,
-      type: admin.type,
       active: admin.active,
     });
   } else {
@@ -87,7 +84,6 @@ const toggleAdminStatus = asyncHandler(async (req, res) => {
     _id: updatedAdmin._id,
     name: updatedAdmin.name,
     username: updatedAdmin.username,
-    type: updatedAdmin.type,
     active: updatedAdmin.active,
   });
 });
@@ -110,7 +106,6 @@ const authAdmin = asyncHandler(async (req, res) => {
       name: admin.name,
       username: admin.username,
       email: admin.email,
-      type: admin.type,
       active: admin.active,
       lastLogin: admin.lastLogin,
       ...tokens,
@@ -150,33 +145,24 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
 // @desc    Reset password
 // @route   POST /api/admins/reset-password
-// @access  Public
+// @access  Public (no JWT required)
 const resetPassword = asyncHandler(async (req, res) => {
-  const { token, password } = req.body;
+  const { username, newPassword } = req.body;
 
-  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-  
-  const admin = await Admin.findOne({
-    passwordResetToken: hashedToken,
-    passwordResetExpires: { $gt: Date.now() }
-  });
-  
+  const admin = await Admin.findOne({ username: username?.toLowerCase() });
+
   if (!admin) {
-    res.status(400);
-    throw new Error('Invalid or expired reset token');
+    res.status(404);
+    throw new Error('Admin not found');
   }
-  
-  // Set new password
-  admin.password = password;
-  admin.clearPasswordResetFields();
+
+  admin.password = newPassword;
   admin.loginAttempts = 0;
   admin.lockUntil = undefined;
-  
+
   await admin.save();
-  
-  res.json({
-    message: 'Password reset successful'
-  });
+
+  res.json({ message: 'Password reset successful' });
 });
 
 // @desc    Refresh token
@@ -241,7 +227,6 @@ const getAdminProfile = asyncHandler(async (req, res) => {
     name: admin.name,
     username: admin.username,
     email: admin.email,
-    type: admin.type,
     active: admin.active,
     createdAt: admin.createdAt,
     lastLogin: admin.lastLogin,

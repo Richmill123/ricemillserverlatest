@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, query, param, validationResult } from 'express-validator';
-import { protect, authorize } from '../middleware/authMiddleware.js';
+import { protect } from '../middleware/authMiddleware.js';
 import {
   createAdmin,
   getAdmins,
@@ -59,10 +59,11 @@ router.post('/forgot-password',
 
 router.post('/reset-password',
   [
-    body('token')
+    body('username')
+      .trim()
       .notEmpty()
-      .withMessage('Reset token is required'),
-    body('password')
+      .withMessage('Username is required'),
+    body('newPassword')
       .isLength({ min: 8 })
       .withMessage('Password must be at least 8 characters long')
       .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/)
@@ -80,7 +81,6 @@ router.post('/logout', protect, logout);
 
 router.get('/dashboard',
   protect,
-  authorize('merchant_mill', 'custom_milling', 'hybrid'),
   [
     query('clientId')
       .notEmpty()
@@ -100,16 +100,11 @@ router.get('/dashboard',
   getDashboard
 );
 
-router.get('/profile',
-  protect,
-  getAdminProfile
-);
+router.get('/profile', getAdminProfile);
 
-// Admin management (super_admin only)
+// Admin management
 router.route('/')
   .post(
-    protect,
-    authorize('merchant_mill'),
     [
       body('name')
         .trim()
@@ -126,10 +121,6 @@ router.route('/')
         .withMessage('Password must be at least 8 characters long')
         .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/)
         .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'),
-      body('type')
-        .optional()
-        .isIn(['merchant_mill', 'custom_milling', 'hybrid'])
-        .withMessage('Type must be one of: merchant_mill, custom_milling, hybrid'),
       body('email')
         .optional()
         .isEmail()
@@ -139,16 +130,10 @@ router.route('/')
     handleValidationErrors,
     createAdmin
   )
-  .get(
-    protect,
-    authorize('merchant_mill'),
-    getAdmins
-  );
+  .get(getAdmins);
 
 router.route('/:id')
   .delete(
-    protect,
-    authorize('merchant_mill'),
     [
       param('id')
         .isMongoId()
@@ -160,8 +145,6 @@ router.route('/:id')
 
 router.route('/:id/active')
   .put(
-    protect,
-    authorize('merchant_mill'),
     [
       param('id')
         .isMongoId()

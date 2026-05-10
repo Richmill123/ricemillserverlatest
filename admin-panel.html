@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Rice Mill — Admin Panel</title>
+<style>
+:root {
+  --primary: #4f46e5; --primary-h: #4338ca; --primary-glow: rgba(79,70,229,.14);
+  --success-bg:#dcfce7; --success-fg:#166534; --success-bd:#bbf7d0;
+  --error-bg:#fee2e2;   --error-fg:#991b1b;   --error-bd:#fca5a5;
+  --text:#111827; --muted:#6b7280; --light:#9ca3af;
+  --border:#e5e7eb; --bg:#f1f5f9; --card:#fff;
+  --shadow:0 4px 24px rgba(0,0,0,.07); --shadow-h:0 8px 32px rgba(0,0,0,.12);
+  --r:12px; --r-sm:8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height:100vh;color:var(--text)}
+
+/* HEADER */
+header{
+  background:linear-gradient(135deg,#1e1b4b,#312e81,#4338ca);
+  height:60px;padding:0 28px;
+  display:flex;align-items:center;justify-content:space-between;
+  box-shadow:0 2px 12px rgba(0,0,0,.3);position:sticky;top:0;z-index:200
+}
+.h-left{display:flex;align-items:center;gap:10px}
+.h-icon{width:36px;height:36px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1.1rem}
+.h-text h1{color:#fff;font-size:.95rem;font-weight:700}
+.h-text p{color:rgba(255,255,255,.55);font-size:.7rem;margin-top:1px}
+.h-right{display:flex;align-items:center;gap:8px}
+.h-link{font-size:.78rem;color:rgba(255,255,255,.8);text-decoration:none;padding:6px 14px;border:1px solid rgba(255,255,255,.3);border-radius:7px;transition:background .15s}
+.h-link:hover{background:rgba(255,255,255,.1)}
+
+/* TOASTS */
+#toastWrap{position:fixed;top:70px;right:16px;z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{padding:11px 14px;border-radius:10px;font-size:.84rem;font-weight:500;min-width:260px;max-width:340px;display:flex;align-items:center;gap:9px;box-shadow:0 4px 16px rgba(0,0,0,.18);pointer-events:auto;animation:tIn .28s cubic-bezier(.34,1.56,.64,1) forwards}
+.toast.out{animation:tOut .22s ease forwards}
+@keyframes tIn{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes tOut{from{transform:translateX(0);opacity:1}to{transform:translateX(110%);opacity:0}}
+.t-ok{background:#166534;color:#fff}.t-err{background:#991b1b;color:#fff}.t-info{background:#1e40af;color:#fff}
+.t-x{margin-left:auto;cursor:pointer;opacity:.7;font-size:.8rem}.t-x:hover{opacity:1}
+
+/* DELETE MODAL */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(3px);z-index:500;display:none;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:#fff;border-radius:14px;padding:26px 24px 22px;max-width:360px;width:calc(100% - 28px);box-shadow:0 20px 60px rgba(0,0,0,.22);animation:pop .24s cubic-bezier(.34,1.56,.64,1) forwards}
+@keyframes pop{from{transform:scale(.88);opacity:0}to{transform:scale(1);opacity:1}}
+.modal-icon{font-size:2.2rem;text-align:center;margin-bottom:10px}
+.modal h3{font-size:1rem;font-weight:700;text-align:center}
+.modal p{font-size:.82rem;color:var(--muted);text-align:center;margin-top:5px;line-height:1.5}
+.modal strong{color:var(--text)}
+.modal-btns{display:flex;gap:8px;margin-top:20px}
+.modal-btns button{flex:1;padding:10px;border:none;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer;transition:opacity .15s,transform .12s}
+.modal-btns button:active{transform:scale(.97)}
+.m-cancel{background:#f3f4f6;color:var(--text)}.m-cancel:hover{background:#e5e7eb}
+.m-del{background:#ef4444;color:#fff}.m-del:hover{opacity:.9}.m-del:disabled{opacity:.55;cursor:not-allowed}
+
+/* LAYOUT */
+.main{max-width:1080px;margin:0 auto;padding:24px 18px 60px}
+
+/* SECTION HEAD */
+.sh{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.sh h2{font-size:.95rem;font-weight:700}
+.sh-badge{font-size:.69rem;font-weight:600;padding:3px 9px;border-radius:20px;background:#ede9fe;color:#4f46e5}
+.sh-line{flex:1;height:1px;background:var(--border)}
+.sh p{font-size:.76rem;color:var(--muted)}
+
+/* PROFILE SECTION */
+.profile-card{background:#fff;border-radius:var(--r);box-shadow:var(--shadow);padding:20px 22px;margin-bottom:28px}
+.search-row{display:flex;gap:8px;margin-bottom:18px}
+.search-row input{
+  flex:1;padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--r-sm);
+  font-size:.87rem;outline:none;background:#fafafa;
+  transition:border-color .2s,box-shadow .2s,background .2s
+}
+.search-row input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow);background:#fff}
+.btn-search{
+  padding:10px 20px;background:var(--primary);color:#fff;border:none;border-radius:var(--r-sm);
+  font-size:.86rem;font-weight:700;cursor:pointer;white-space:nowrap;
+  display:flex;align-items:center;gap:6px;
+  box-shadow:0 3px 10px rgba(79,70,229,.32);transition:background .15s,transform .15s,box-shadow .15s
+}
+.btn-search:hover:not(:disabled){background:var(--primary-h);transform:translateY(-1px);box-shadow:0 5px 14px rgba(79,70,229,.4)}
+.btn-search:disabled{opacity:.55;cursor:not-allowed;transform:none}
+
+.p-empty{text-align:center;padding:24px 0;color:var(--light);font-size:.86rem}
+.p-empty span{font-size:2rem;display:block;margin-bottom:6px;opacity:.5}
+
+.p-result{display:none}
+.p-result.show{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+.p-avatar{width:66px;height:66px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:800;color:#fff;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.p-info{flex:1;min-width:180px}
+.p-name{font-size:1.05rem;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.p-uname{font-size:.79rem;color:var(--muted);margin-top:2px}
+.p-meta{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:9px}
+.mi label{font-size:.68rem;font-weight:600;color:var(--light);text-transform:uppercase;letter-spacing:.5px;display:block}
+.mi span{font-size:.83rem;color:var(--text);font-weight:500}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:.71rem;font-weight:700}
+.b-on{background:var(--success-bg);color:var(--success-fg)}
+.b-off{background:var(--error-bg);color:var(--error-fg)}
+.dot{width:5px;height:5px;border-radius:50%}
+.b-on .dot{background:#22c55e}.b-off .dot{background:#ef4444}
+
+/* ADMIN GRID */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}
+
+/* ADMIN CARD */
+.ac{background:#fff;border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;transition:transform .2s,box-shadow .2s}
+.ac:hover{transform:translateY(-3px);box-shadow:var(--shadow-h)}
+.ac-top{padding:18px 18px 12px;display:flex;gap:12px;align-items:flex-start}
+.ac-av{width:48px;height:48px;flex-shrink:0;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.15rem;font-weight:800;color:#fff}
+.ac-info{flex:1;min-width:0}
+.ac-name{font-size:.92rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ac-user{font-size:.76rem;color:var(--muted);margin-top:1px}
+.ac-email{font-size:.76rem;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ac-mid{padding:0 18px 12px;display:flex;align-items:center;justify-content:space-between}
+.ac-since{font-size:.7rem;color:var(--light)}
+.ac-foot{margin-top:auto;padding:10px 14px;border-top:1px solid #f3f4f6;background:#fafafa;display:flex;gap:6px}
+.ac-btn{flex:1;padding:8px 6px;border:none;border-radius:7px;font-size:.78rem;font-weight:700;cursor:pointer;transition:opacity .15s,transform .12s;display:flex;align-items:center;justify-content:center;gap:4px}
+.ac-btn:active:not(:disabled){transform:scale(.96)}
+.ac-btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-deact{background:#fee2e2;color:#b91c1c}.btn-deact:hover:not(:disabled){background:#fecaca}
+.btn-act  {background:var(--success-bg);color:var(--success-fg)}.btn-act:hover:not(:disabled){background:#bbf7d0}
+.btn-del  {background:#f3f4f6;color:#4b5563}.btn-del:hover:not(:disabled){background:#fee2e2;color:#991b1b}
+
+/* EMPTY / LOADING */
+.placeholder{grid-column:1/-1;text-align:center;padding:48px 20px;color:var(--light)}
+.placeholder span{font-size:2.8rem;display:block;margin-bottom:10px;opacity:.45}
+.placeholder p{font-size:.88rem}
+
+/* SPINNER */
+.spin-sm{width:13px;height:13px;border:2px solid rgba(0,0,0,.15);border-top-color:currentColor;border-radius:50%;animation:rot .65s linear infinite}
+.spin-sm.w{border-color:rgba(255,255,255,.3);border-top-color:#fff}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+@media(max-width:600px){
+  .search-row{flex-direction:column}
+  .btn-search{width:100%;justify-content:center}
+  .p-result.show{flex-direction:column}
+  header{padding:0 14px}
+  .main{padding:18px 12px 48px}
+}
+</style>
+</head>
+<body>
+<div id="toastWrap"></div>
+
+<!-- DELETE MODAL -->
+<div class="overlay" id="delOverlay">
+  <div class="modal">
+    <div class="modal-icon">🗑️</div>
+    <h3>Delete Admin?</h3>
+    <p>Permanently delete <strong id="delName"></strong>?<br/>This action cannot be undone.</p>
+    <div class="modal-btns">
+      <button class="m-cancel" onclick="closeModal()">Cancel</button>
+      <button class="m-del" id="delConfirmBtn" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<header>
+  <div class="h-left">
+    <div class="h-icon">🌾</div>
+    <div class="h-text">
+      <h1>Rice Mill — Admin Panel</h1>
+      <p>Profile lookup &amp; admin management</p>
+    </div>
+  </div>
+  <div class="h-right">
+    <a class="h-link" href="admin-auth.html">← Admin Setup</a>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- ── PROFILE LOOKUP ── -->
+  <div class="sh">
+    <h2>👤 Profile Lookup</h2>
+    <span class="sh-badge">Public</span>
+    <div class="sh-line"></div>
+    <p>Search by Admin ID</p>
+  </div>
+
+  <div class="profile-card">
+    <div class="search-row">
+      <input id="profileId" type="text" placeholder="Enter Admin ID (MongoDB ObjectId)…" autocomplete="off"/>
+      <button class="btn-search" id="fetchBtn" onclick="fetchProfile()">🔍 Fetch Profile</button>
+    </div>
+    <div class="p-empty" id="pEmpty"><span>👤</span>Enter an Admin ID above to view profile</div>
+    <div class="p-result" id="pResult">
+      <div class="p-avatar" id="pAv"></div>
+      <div class="p-info">
+        <div class="p-name"><span id="pName"></span><span id="pBadge" class="badge"></span></div>
+        <div class="p-uname" id="pUser"></div>
+        <div class="p-meta">
+          <div class="mi"><label>Email</label><span id="pEmail"></span></div>
+          <div class="mi"><label>Joined</label><span id="pJoined"></span></div>
+          <div class="mi"><label>Last Login</label><span id="pLogin"></span></div>
+          <div class="mi"><label>Admin ID</label><span id="pId" style="font-size:.73rem;font-family:monospace;word-break:break-all"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ADMIN GRID ── -->
+  <div class="sh">
+    <h2>⚙️ All Admins</h2>
+    <span class="sh-badge" id="countBadge">—</span>
+    <div class="sh-line"></div>
+    <button onclick="loadAdmins()" style="font-size:.76rem;background:none;border:1px solid var(--border);border-radius:6px;padding:4px 12px;cursor:pointer;color:var(--muted);transition:background .15s" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">↺ Refresh</button>
+  </div>
+
+  <div class="grid" id="adminGrid">
+    <div class="placeholder"><span>⏳</span><p>Loading admins…</p></div>
+  </div>
+
+</div>
+
+<script>
+/* ── CONFIG ──────────────────────────────────────────────
+   Set ADMIN_ID to your MongoDB admin _id to auto-load
+   the profile on page open.
+   e.g. ADMIN_ID: '6507abc1234567890abcdef0'
+──────────────────────────────────────────────────────── */
+const CONFIG = {
+  API:      'https://rice-mill-server-latest.vercel.app',
+  ADMIN_ID: '',   // ← paste your admin's MongoDB _id here
+};
+
+const $ = id => document.getElementById(id);
+
+/* current profile id shown */
+let shownProfileId = '';
+
+/* pending delete */
+let delId = '', delDisplayName = '';
+
+/* ── AVATAR COLORS ── */
+const COLORS = [
+  ['#6366f1','#4f46e5'],['#06b6d4','#0891b2'],
+  ['#f59e0b','#d97706'],['#10b981','#059669'],
+  ['#ec4899','#db2777'],['#8b5cf6','#7c3aed'],
+];
+function avColor(s) { return COLORS[(s||'?').charCodeAt(0) % COLORS.length]; }
+function initials(n) {
+  const p = (n||'?').trim().split(/\s+/);
+  return p.length >= 2 ? (p[0][0]+p[1][0]).toUpperCase() : (n||'?').slice(0,2).toUpperCase();
+}
+
+/* ── TOAST ── */
+function toast(msg, type) {
+  const cls = { ok:'t-ok', err:'t-err', info:'t-info' };
+  const el  = document.createElement('div');
+  el.className = 'toast ' + (cls[type]||'t-info');
+  el.innerHTML = `<span style="flex:1">${msg}</span><span class="t-x" onclick="rmT(this)">✕</span>`;
+  $('toastWrap').appendChild(el);
+  setTimeout(() => rmT(el.querySelector('.t-x')), 4500);
+}
+function rmT(x) {
+  const el = x.closest ? x.closest('.toast') : x;
+  if (!el || el.classList.contains('out')) return;
+  el.classList.add('out'); setTimeout(() => el.remove(), 240);
+}
+
+/* ── DATES ── */
+function fmt(d, short) {
+  if (!d) return '—';
+  const opts = short
+    ? { day:'2-digit', month:'short', year:'numeric' }
+    : { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' };
+  return new Date(d).toLocaleString('en-IN', opts);
+}
+
+/* ── PROFILE LOOKUP ── */
+async function fetchProfile(idOverride) {
+  const id = idOverride || $('profileId').value.trim();
+  if (!id) { toast('Enter an Admin ID first.', 'err'); return; }
+  if (!idOverride) $('profileId').value = id;
+
+  const btn = $('fetchBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spin-sm w"></div> Fetching…';
+
+  try {
+    const res  = await fetch(`${CONFIG.API}/api/admins/profile?adminId=${encodeURIComponent(id)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error || 'Not found');
+    renderProfile(data);
+  } catch (e) {
+    toast(e.message, 'err');
+    $('pEmpty').style.display = 'block';
+    $('pResult').classList.remove('show');
+    shownProfileId = '';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🔍 Fetch Profile';
+  }
+}
+
+function renderProfile(a) {
+  shownProfileId = a._id || '';
+  $('pEmpty').style.display = 'none';
+  const [c1,c2] = avColor(a.name);
+  $('pAv').style.background = `linear-gradient(135deg,${c1},${c2})`;
+  $('pAv').textContent = initials(a.name);
+  $('pName').textContent = a.name || '—';
+  $('pUser').textContent = '@' + (a.username || '—');
+  const b = $('pBadge');
+  b.className = 'badge ' + (a.active ? 'b-on' : 'b-off');
+  b.innerHTML = `<span class="dot"></span>${a.active ? 'Active' : 'Inactive'}`;
+  $('pEmail').textContent  = a.email || '—';
+  $('pJoined').textContent = fmt(a.createdAt, true);
+  $('pLogin').textContent  = fmt(a.lastLogin, false);
+  $('pId').textContent     = a._id || '—';
+  $('pResult').classList.add('show');
+}
+
+$('profileId').addEventListener('keydown', e => { if (e.key === 'Enter') fetchProfile(); });
+
+/* ── ADMIN GRID ── */
+async function loadAdmins() {
+  $('adminGrid').innerHTML = '<div class="placeholder"><span>⏳</span><p>Loading…</p></div>';
+  $('countBadge').textContent = '—';
+  try {
+    const res  = await fetch(`${CONFIG.API}/api/admins`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error || 'Failed');
+    $('countBadge').textContent = data.length + ' admins';
+    renderGrid(data);
+  } catch (e) {
+    toast(e.message, 'err');
+    $('adminGrid').innerHTML = '<div class="placeholder"><span>⚠️</span><p>Failed to load admins.</p></div>';
+  }
+}
+
+function renderGrid(list) {
+  if (!list.length) {
+    $('adminGrid').innerHTML = '<div class="placeholder"><span>👥</span><p>No admins found.</p></div>';
+    return;
+  }
+  $('adminGrid').innerHTML = list.map(a => {
+    const [c1,c2] = avColor(a.name);
+    const on   = a.active;
+    const year = a.createdAt ? new Date(a.createdAt).getFullYear() : '—';
+    return `
+    <div class="ac" id="card-${a._id}">
+      <div class="ac-top">
+        <div class="ac-av" style="background:linear-gradient(135deg,${c1},${c2})">${initials(a.name)}</div>
+        <div class="ac-info">
+          <div class="ac-name" title="${h(a.name)}">${h(a.name||'—')}</div>
+          <div class="ac-user">@${h(a.username)}</div>
+          <div class="ac-email" title="${h(a.email||'')}">
+            ${a.email ? h(a.email) : '<span style="color:var(--light)">No email</span>'}
+          </div>
+        </div>
+      </div>
+      <div class="ac-mid">
+        <span class="badge ${on?'b-on':'b-off'}"><span class="dot"></span>${on?'Active':'Inactive'}</span>
+        <span class="ac-since">Since ${year}</span>
+      </div>
+      <div class="ac-foot">
+        <button class="ac-btn ${on?'btn-deact':'btn-act'}"
+          data-id="${a._id}" data-active="${on}" onclick="toggleStatus(this)">
+          ${on?'⛔ Deactivate':'✅ Activate'}
+        </button>
+        <button class="ac-btn btn-del"
+          data-id="${a._id}" data-name="${h(a.name||a.username)}" onclick="askDelete(this)">
+          🗑 Delete
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* HTML escape — used in innerHTML only (not in onclick) */
+function h(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── TOGGLE ── */
+async function toggleStatus(btn) {
+  const id       = btn.dataset.id;
+  const isActive = btn.dataset.active === 'true';
+  btn.disabled   = true;
+  btn.innerHTML  = '<div class="spin-sm"></div>';
+  try {
+    const res  = await fetch(`${CONFIG.API}/api/admins/${id}/active`, { method: 'PUT' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error || 'Toggle failed');
+    toast(`"${data.username}" is now ${data.active ? 'Active' : 'Inactive'}.`, 'ok');
+    loadAdmins();
+    if (shownProfileId === id) fetchProfile(id);
+  } catch (e) {
+    toast(e.message, 'err');
+    btn.disabled = false;
+    btn.innerHTML = isActive ? '⛔ Deactivate' : '✅ Activate';
+  }
+}
+
+/* ── DELETE ── */
+function askDelete(btn) {
+  delId          = btn.dataset.id;
+  delDisplayName = btn.dataset.name;
+  $('delName').textContent = delDisplayName;
+  $('delOverlay').classList.add('open');
+}
+function closeModal() {
+  $('delOverlay').classList.remove('open');
+  delId = ''; delDisplayName = '';
+}
+$('delOverlay').addEventListener('click', e => { if (e.target === $('delOverlay')) closeModal(); });
+
+async function confirmDelete() {
+  if (!delId) return;
+  /* save before closing modal */
+  const id   = delId;
+  const name = delDisplayName;
+
+  const btn  = $('delConfirmBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spin-sm w" style="border-color:rgba(255,255,255,.3);border-top-color:#fff"></div>';
+
+  try {
+    const res  = await fetch(`${CONFIG.API}/api/admins/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error || 'Delete failed');
+    toast(`"${name}" deleted.`, 'ok');
+    closeModal();
+    loadAdmins();
+    if (shownProfileId === id) {
+      $('pResult').classList.remove('show');
+      $('pEmpty').style.display = 'block';
+      $('profileId').value = '';
+      shownProfileId = '';
+    }
+  } catch (e) {
+    toast(e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Delete';
+  }
+}
+
+/* ── INIT ── */
+loadAdmins();
+if (CONFIG.ADMIN_ID) {
+  $('profileId').value = CONFIG.ADMIN_ID;
+  fetchProfile(CONFIG.ADMIN_ID);
+}
+</script>
+</body>
+</html>

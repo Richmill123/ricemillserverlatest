@@ -6,7 +6,8 @@
       "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\Thilak Kumar\\\\CascadeProjects\\\\rice-mill-server-latest\" -Recurse -File -Exclude node_modules | Where-Object { $_.FullName -notmatch 'node_modules' } | Select-Object -ExpandProperty FullName | Sort-Object)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(vercel *)"
     ]
   }
 }
