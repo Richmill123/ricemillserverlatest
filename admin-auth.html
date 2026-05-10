@@ -150,8 +150,8 @@ input.eye-pad{padding-right:40px}
           </div>
           <div class="fg">
             <label>Username <span class="req">*</span></label>
-            <input id="c_user" type="text" placeholder="e.g. ravi_k" autocomplete="off"/>
-            <p class="hint">3–20 chars · letters, numbers, _</p>
+            <input id="c_user" type="text" placeholder="e.g. ricemillname/username" pattern="^[a-zA-Z0-9/]{3,20}$" autocomplete="off"/>
+            <p class="hint">3–20 chars · letters, numbers, /</p>
           </div>
         </div>
         <div class="fg">
@@ -183,7 +183,7 @@ input.eye-pad{padding-right:40px}
       <div class="card-body">
         <div class="fg">
           <label>Username <span class="req">*</span></label>
-          <input id="r_user" type="text" placeholder="Target admin's username" autocomplete="off"/>
+          <input id="r_user" type="text" placeholder="Target admin's username (letters, numbers, /)" pattern="^[a-zA-Z0-9/]{3,20}$" autocomplete="off"/>
         </div>
         <div class="fg">
           <label>New Password <span class="req">*</span></label>
@@ -281,6 +281,7 @@ async function doCreate() {
   const email    = $('c_email').value.trim();
   if (!name)     { toast('Full name is required.', 'err'); return; }
   if (!username) { toast('Username is required.', 'err'); return; }
+  if (!/^[a-zA-Z0-9/]{3,20}$/.test(username)) { toast('Username can only contain letters, numbers, and / (3–20 characters).', 'err'); return; }
   if (!password) { toast('Password is required.', 'err'); return; }
 
   busy('createBtn', true, 'Create Admin');
@@ -306,6 +307,7 @@ async function doReset() {
   const newPassword = $('r_pass').value;
   const confirm     = $('r_confirm').value;
   if (!username)               { toast('Username is required.', 'err'); return; }
+  if (!/^[a-zA-Z0-9/]{3,20}$/.test(username)) { toast('Username can only contain letters, numbers, and / (3–20 characters).', 'err'); return; }
   if (!newPassword)            { toast('New password is required.', 'err'); return; }
   if (newPassword !== confirm) { toast('Passwords do not match.', 'err'); return; }
 

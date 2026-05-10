@@ -121,7 +121,7 @@ export const corsOptions = {
 
 // Input validation patterns
 export const validationPatterns = {
-  username: /^[a-zA-Z0-9_\\/]{3,20}$/,
+  username: /^[a-zA-Z0-9/]{3,20}$/,
   password: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
   email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
   phone: /^\+?[\d\s\-\(\)]+$/,

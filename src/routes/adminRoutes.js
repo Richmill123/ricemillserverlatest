@@ -36,8 +36,8 @@ router.post('/login',
       .trim()
       .isLength({ min: 3, max: 20 })
       .withMessage('Username must be between 3 and 20 characters')
-      .matches(/^[a-zA-Z0-9_\\/]+$/)
-      .withMessage('Username can only contain letters, numbers, underscores, forward slashes, and backslashes'),
+      .matches(/^[a-zA-Z0-9/]+$/)
+      .withMessage('Username can only contain letters, numbers, and forward slashes'),
     body('password')
       .isLength({ min: 8 })
       .withMessage('Password must be at least 8 characters long'),
@@ -114,8 +114,8 @@ router.route('/')
         .trim()
         .isLength({ min: 3, max: 20 })
         .withMessage('Username must be between 3 and 20 characters')
-        .matches(/^[a-zA-Z0-9_\\]+$/)
-        .withMessage('Username can only contain letters, numbers, underscores, and backslashes'),
+        .matches(/^[a-zA-Z0-9/]+$/)
+        .withMessage('Username can only contain letters, numbers, and forward slashes'),
       body('password')
         .isLength({ min: 8 })
         .withMessage('Password must be at least 8 characters long')
