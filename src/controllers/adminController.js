@@ -8,7 +8,6 @@ import Expense from '../models/expenseModel.js';
 import Stock from '../models/stockModel.js';
 import Employee from '../models/employeeModel.js';
 import Income from '../models/incomeModel.js';
-import Billing from '../models/billingModel.js';
 import Purchase from '../models/purchaseModel.js';
 
 // @desc    Create a new admin
@@ -340,10 +339,11 @@ const rangeEnd = endDate
     yearSalesByItemAgg,
     stockDocs,
     orderStatusesAgg,
-    paidBillingAgg,
     purchaseRangeAgg,
-    yearBillingAgg,
     yearPurchaseAgg,
+    pendingOrdersAgg,
+    pendingPurchasesAgg,
+    pendingSalesAgg,
   ] = await Promise.all([
     Order.aggregate([
       {
@@ -577,25 +577,10 @@ const rangeEnd = endDate
         },
       },
     ]),
-    // Paid billing invoices in date range (contributes to revenue)
-    Billing.aggregate([
-      { $match: { clientId: clientIdTrimmed, status: 'paid', invoiceDate: createdAtFilter } },
-      { $group: { _id: null, totalAmount: { $sum: '$totalAmount' }, count: { $sum: 1 } } },
-    ]),
     // Purchases in date range (contributes to expense)
     Purchase.aggregate([
       { $match: { clientId: clientIdTrimmed, purchaseDate: createdAtFilter } },
       { $group: { _id: null, totalAmount: { $sum: '$totalAmount' }, count: { $sum: 1 } } },
-    ]),
-    // Yearly paid billing by month
-    Billing.aggregate([
-      { $match: { clientId: clientIdTrimmed, status: 'paid', invoiceDate: { $gte: yearStart, $lt: yearEndExclusive } } },
-      {
-        $group: {
-          _id: monthFilter ? null : { $month: '$invoiceDate' },
-          totalAmount: { $sum: '$totalAmount' },
-        },
-      },
     ]),
     // Yearly purchases by month
     Purchase.aggregate([
@@ -604,6 +589,54 @@ const rangeEnd = endDate
         $group: {
           _id: monthFilter ? null : { $month: '$purchaseDate' },
           totalAmount: { $sum: '$totalAmount' },
+        },
+      },
+    ]),
+    // Pending orders: not yet paid — pending = totalAmount - advanceAmount
+    Order.aggregate([
+      {
+        $match: {
+          clientId: clientIdTrimmed,
+          status: { $ne: 'PAID & CLOSE' },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalPending: { $sum: { $subtract: ['$totalAmount', '$advanceAmount'] } },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+    // Pending purchases: not fully paid
+    Purchase.aggregate([
+      {
+        $match: {
+          clientId: clientIdTrimmed,
+          paymentStatus: { $in: ['pending', 'partial'] },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalPending: { $sum: '$totalAmount' },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+    // Pending sales: not paid — use mydebt field
+    Sale.aggregate([
+      {
+        $match: {
+          clientId: clientIdTrimmed,
+          paymentStatus: { $ne: 'Paid' },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalPending: { $sum: '$mydebt' },
+          count: { $sum: 1 },
         },
       },
     ]),
@@ -659,14 +692,17 @@ const salesByItemType = {
     stockByItemType[key] = s.availableQuantity || 0;
   }
 
-  const paidBillings  = paidBillingAgg?.[0]  || { totalAmount: 0, count: 0 };
   const purchaseRange = purchaseRangeAgg?.[0] || { totalAmount: 0, count: 0 };
 
   const revenueOrders  = paidOrders.totalAmount    || 0;
   const revenueSales   = paidSales.totalAmount      || 0;
   const revenueIncome  = incomes.totalIncome        || 0;
-  const revenueBilling = paidBillings.totalAmount   || 0;
-  const revenueTotal   = revenueOrders + revenueSales + revenueIncome + revenueBilling;
+  const revenueTotal   = revenueOrders + revenueSales + revenueIncome;
+
+  const pendingOrderAmount    = pendingOrdersAgg?.[0]?.totalPending    || 0;
+  const pendingPurchaseAmount = pendingPurchasesAgg?.[0]?.totalPending || 0;
+  const pendingSaleAmount     = pendingSalesAgg?.[0]?.totalPending     || 0;
+  const pendingTotal          = pendingOrderAmount + pendingPurchaseAmount + pendingSaleAmount;
 
   const expenseWages    = wages.totalWage         || 0;
   const expenseSalary   = salaries.totalSalary    || 0;
@@ -689,8 +725,8 @@ const todaySummaryTotalOrder = pendingOrdersExcludingToday.totalBags || 0;
 
     return {
       month: i + 1,
-      revenue: { orders: 0, sales: 0, billing: 0, total: 0 },
-      expense: { wages: 0, salary: expenseSalary, other: 0, purchase: 0, total: 0 },
+      revenue: { orders: 0, sales: 0, total: 0 },
+      expense: { wages: 0, salary: expenseSalary, expense: 0, purchase: 0, total: 0 },
       profit: 0,
       sales: { byItemType },
     };
@@ -701,8 +737,8 @@ const todaySummaryTotalOrder = pendingOrdersExcludingToday.totalBags || 0;
     // Single month data - create one month entry
     const singleMonthData = {
       month: monthFilter,
-      revenue: { orders: 0, sales: 0, billing: 0, total: 0 },
-      expense: { wages: 0, salary: expenseSalary, other: 0, purchase: 0, total: 0 },
+      revenue: { orders: 0, sales: 0, total: 0 },
+      expense: { wages: 0, salary: expenseSalary, expense: 0, purchase: 0, total: 0 },
       profit: 0,
       sales: { byItemType: {
         bran: { quantity: 0, amount: 0 },
@@ -720,14 +756,11 @@ const todaySummaryTotalOrder = pendingOrdersExcludingToday.totalBags || 0;
     if (yearPaidSalesAgg?.[0]) {
       singleMonthData.revenue.sales = yearPaidSalesAgg[0].totalAmount || 0;
     }
-    if (yearBillingAgg?.[0]) {
-      singleMonthData.revenue.billing = yearBillingAgg[0].totalAmount || 0;
-    }
     if (yearWagesAgg?.[0]) {
       singleMonthData.expense.wages = yearWagesAgg[0].totalWage || 0;
     }
     if (yearExpensesAgg?.[0]) {
-      singleMonthData.expense.other = yearExpensesAgg[0].totalExpense || 0;
+      singleMonthData.expense.expense = yearExpensesAgg[0].totalExpense || 0;
     }
     if (yearPurchaseAgg?.[0]) {
       singleMonthData.expense.purchase = yearPurchaseAgg[0].totalAmount || 0;
@@ -742,23 +775,28 @@ const todaySummaryTotalOrder = pendingOrdersExcludingToday.totalBags || 0;
       }
     }
 
-    singleMonthData.revenue.total = (singleMonthData.revenue.orders || 0) + (singleMonthData.revenue.sales || 0) + (yearIncomeAgg?.[0]?.totalIncome || 0) + (singleMonthData.revenue.billing || 0);
-    singleMonthData.expense.total = (singleMonthData.expense.wages || 0) + (singleMonthData.expense.salary || 0) + (singleMonthData.expense.other || 0) + (singleMonthData.expense.purchase || 0);
+    singleMonthData.revenue.total = (singleMonthData.revenue.orders || 0) + (singleMonthData.revenue.sales || 0) + (yearIncomeAgg?.[0]?.totalIncome || 0);
+    singleMonthData.expense.total = (singleMonthData.expense.wages || 0) + (singleMonthData.expense.salary || 0) + (singleMonthData.expense.expense || 0) + (singleMonthData.expense.purchase || 0);
     singleMonthData.profit = singleMonthData.revenue.total - singleMonthData.expense.total;
 
     res.json({
       revenue: {
         orders: revenueOrders,
         sales: revenueSales,
-        billing: revenueBilling,
         total: revenueTotal,
       },
       expense: {
         wages: expenseWages,
         salary: expenseSalary,
-        other: expenseOther,
+        expense: expenseOther,
         purchase: expensePurchase,
         total: expenseTotal,
+      },
+      pending: {
+        orders: pendingOrderAmount,
+        purchases: pendingPurchaseAmount,
+        sales: pendingSaleAmount,
+        total: pendingTotal,
       },
       profit: revenueTotal - expenseTotal,
       todaySummary: {
@@ -795,17 +833,13 @@ const todaySummaryTotalOrder = pendingOrdersExcludingToday.totalBags || 0;
     const idx = (row._id || 0) - 1;
     if (yearMonths[idx]) yearMonths[idx].revenue.sales = row.totalAmount || 0;
   }
-  for (const row of yearBillingAgg || []) {
-    const idx = (row._id || 0) - 1;
-    if (yearMonths[idx]) yearMonths[idx].revenue.billing = row.totalAmount || 0;
-  }
   for (const row of yearWagesAgg || []) {
     const idx = (row._id || 0) - 1;
     if (yearMonths[idx]) yearMonths[idx].expense.wages = row.totalWage || 0;
   }
   for (const row of yearExpensesAgg || []) {
     const idx = (row._id || 0) - 1;
-    if (yearMonths[idx]) yearMonths[idx].expense.other = row.totalExpense || 0;
+    if (yearMonths[idx]) yearMonths[idx].expense.expense = row.totalExpense || 0;
   }
   for (const row of yearPurchaseAgg || []) {
     const idx = (row._id || 0) - 1;
@@ -827,8 +861,8 @@ const todaySummaryTotalOrder = pendingOrdersExcludingToday.totalBags || 0;
 
   for (const m of yearMonths) {
     const monthIncome = yearIncomeAgg?.find(row => (row._id || 0) === m.month)?.totalIncome || 0;
-    m.revenue.total = (m.revenue.orders || 0) + (m.revenue.sales || 0) + (m.revenue.billing || 0) + monthIncome;
-    m.expense.total = (m.expense.wages || 0) + (m.expense.salary || 0) + (m.expense.other || 0) + (m.expense.purchase || 0);
+    m.revenue.total = (m.revenue.orders || 0) + (m.revenue.sales || 0) + monthIncome;
+    m.expense.total = (m.expense.wages || 0) + (m.expense.salary || 0) + (m.expense.expense || 0) + (m.expense.purchase || 0);
     m.profit = m.revenue.total - m.expense.total;
   }
 
@@ -836,15 +870,20 @@ const todaySummaryTotalOrder = pendingOrdersExcludingToday.totalBags || 0;
     revenue: {
       orders: revenueOrders,
       sales: revenueSales,
-      billing: revenueBilling,
       total: revenueTotal,
     },
     expense: {
       wages: expenseWages,
       salary: expenseSalary,
-      other: expenseOther,
+      expense: expenseOther,
       purchase: expensePurchase,
       total: expenseTotal,
+    },
+    pending: {
+      orders: pendingOrderAmount,
+      purchases: pendingPurchaseAmount,
+      sales: pendingSaleAmount,
+      total: pendingTotal,
     },
     profit: revenueTotal - expenseTotal,
     todaySummary: {
