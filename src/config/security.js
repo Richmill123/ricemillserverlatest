@@ -98,13 +98,25 @@ export const helmetConfig = helmet({
   }
 });
 
+// Origins always permitted regardless of env vars
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost:4200',
+  'http://localhost:3000',
+  'https://ricemillui.netlify.app',
+  'capacitor://localhost',
+  'https://localhost',
+];
+
 // CORS configuration
 export const corsOptions = {
   origin: function (origin, callback) {
     // Allow no-origin requests (curl, mobile) and null-origin (file:// pages)
     if (!origin || origin === 'null') return callback(null, true);
 
-    // If ALLOWED_ORIGINS is set, enforce the whitelist; otherwise allow all
+    // Always allow default origins
+    if (DEFAULT_ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+
+    // If ALLOWED_ORIGINS is set, also check that whitelist
     if (process.env.ALLOWED_ORIGINS) {
       const allowed = process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim());
       return callback(null, allowed.includes(origin));
