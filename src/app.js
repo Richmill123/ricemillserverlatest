@@ -60,7 +60,10 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Body parsing middleware — 5 mb to accommodate base64 logo images
-app.use(express.json({ limit: '5mb' }));
+app.use(express.json({
+  limit: '5mb',
+  verify: (req, _res, buf) => { req.rawBody = buf; }
+}));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
 // Rate limiting for different endpoint categories

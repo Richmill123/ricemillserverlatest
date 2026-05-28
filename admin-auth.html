@@ -109,6 +109,7 @@ input.eye-pad{padding-right:40px}
   header{padding:0 14px}
 }
 </style>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 </head>
 <body>
 <div id="toastWrap"></div>
@@ -140,7 +141,7 @@ input.eye-pad{padding-right:40px}
     <div id="p-create" class="panel on">
       <div class="card-head">
         <h2>➕ Create New Admin</h2>
-        <p>Register a new admin account. No authentication required.</p>
+        <p>Register a new admin account. A <strong>₹2,000/month</strong> subscription payment is required to activate the account.</p>
       </div>
       <div class="card-body">
         <div class="row2">
@@ -170,7 +171,7 @@ input.eye-pad{padding-right:40px}
           </div>
           <p class="hint">Uppercase · lowercase · number · special char (@$!%*?&amp;)</p>
         </div>
-        <button class="btn btn-primary" id="createBtn" onclick="doCreate()"><span>Create Admin</span></button>
+        <button class="btn btn-primary" id="createBtn" onclick="doCreate()"><span>💳 Create Admin &amp; Subscribe</span></button>
       </div>
     </div>
 
@@ -212,8 +213,11 @@ input.eye-pad{padding-right:40px}
 </div>
 
 <script>
-const CONFIG = { API: 'https://rice-mill-server-latest.vercel.app' };
-const $  = id => document.getElementById(id);
+const CONFIG = {
+  API:      'https://rice-mill-server-latest.vercel.app',
+  PLAN_NAME:'Rice Mill Management — Monthly Subscription',
+};
+const $ = id => document.getElementById(id);
 
 /* TABS */
 function go(name) {
@@ -273,32 +277,134 @@ function busy(id, on, label) {
   b.innerHTML = on ? '<div class="spin"></div><span>Working…</span>' : `<span>${label}</span>`;
 }
 
-/* CREATE ADMIN */
+/* ── PAYMENT STATE ── */
+let _pendingAdminId   = null;
+let _pendingSubId     = null;
+let _pendingKeyId     = null;
+let _pendingAdminName = '';
+let _pendingAdminEmail= '';
+
+/* ── STEP 1: Create admin (inactive) + subscription ── */
 async function doCreate() {
   const name     = $('c_name').value.trim();
   const username = $('c_user').value.trim();
   const password = $('c_pass').value;
   const email    = $('c_email').value.trim();
+
   if (!name)     { toast('Full name is required.', 'err'); return; }
   if (!username) { toast('Username is required.', 'err'); return; }
-  if (!/^[a-zA-Z0-9/]{3,20}$/.test(username)) { toast('Username can only contain letters, numbers, and / (3–20 characters).', 'err'); return; }
+  if (!/^[a-zA-Z0-9/]{3,20}$/.test(username)) {
+    toast('Username: 3–20 chars, letters/numbers//', 'err'); return;
+  }
   if (!password) { toast('Password is required.', 'err'); return; }
 
-  busy('createBtn', true, 'Create Admin');
+  busy('createBtn', true, 'Create Admin & Subscribe');
   try {
+    // 1. Create admin account (active: false)
     const body = { name, username, password };
     if (email) body.email = email;
-    const res  = await fetch(`${CONFIG.API}/api/admins`, {
+    const r1   = await fetch(`${CONFIG.API}/api/admins`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || data.error || 'Create failed');
-    toast(`Admin "${data.username}" created!`, 'ok');
+    const admin = await r1.json();
+    if (!r1.ok) throw new Error(admin.message || admin.error || 'Account creation failed');
+
+    // 2. Create Razorpay subscription
+    const r2  = await fetch(`${CONFIG.API}/api/admins/razorpay/create-subscription`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminId: admin._id }),
+    });
+    const sub = await r2.json();
+    if (!r2.ok) throw new Error(sub.message || sub.error || 'Subscription setup failed');
+
+    _pendingAdminId    = admin._id;
+    _pendingSubId      = sub.subscriptionId;
+    _pendingKeyId      = sub.keyId;
+    _pendingAdminName  = sub.adminName;
+    _pendingAdminEmail = sub.adminEmail;
+
+    busy('createBtn', false, 'Create Admin & Subscribe');
+    openPayment();
+  } catch (e) {
+    toast(e.message, 'err');
+    busy('createBtn', false, 'Create Admin & Subscribe');
+  }
+}
+
+/* ── STEP 2: Open Razorpay modal ── */
+function openPayment() {
+  const options = {
+    key:             _pendingKeyId,
+    subscription_id: _pendingSubId,
+    name:            CONFIG.PLAN_NAME,
+    description:     '₹2,000/month — Rice Mill Management System',
+    image:           '',
+    prefill: {
+      name:  _pendingAdminName,
+      email: _pendingAdminEmail,
+    },
+    theme:  { color: '#4f46e5' },
+    modal:  { ondismiss: onPaymentDismissed },
+    handler: onPaymentSuccess,
+  };
+  const rzp = new Razorpay(options);
+  rzp.open();
+}
+
+/* ── STEP 3a: Payment success ── */
+async function onPaymentSuccess(response) {
+  toast('Verifying payment…', 'info');
+  try {
+    const r = await fetch(`${CONFIG.API}/api/admins/razorpay/verify-payment`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        adminId:                   _pendingAdminId,
+        razorpay_payment_id:       response.razorpay_payment_id,
+        razorpay_subscription_id:  response.razorpay_subscription_id,
+        razorpay_signature:        response.razorpay_signature,
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.message || data.error || 'Verification failed');
+
+    toast(`✅ Account "${data.username}" created and activated!`, 'ok');
     ['c_name','c_user','c_pass','c_email'].forEach(id => $(id).value = '');
     strength($('c_pass'), 'cs', 'cl');
-  } catch (e) { toast(e.message, 'err'); }
-  finally     { busy('createBtn', false, 'Create Admin'); }
+    _pendingAdminId = _pendingSubId = _pendingKeyId = null;
+    hideRetry();
+  } catch (e) {
+    toast('Payment received but verification failed: ' + e.message, 'err');
+    showRetry();
+  }
+}
+
+/* ── STEP 3b: Payment dismissed ── */
+function onPaymentDismissed() {
+  toast('Payment cancelled. Your account is created but inactive until payment is received.', 'info');
+  showRetry();
+}
+
+/* ── RETRY UI ── */
+function showRetry() {
+  let retryBox = $('retryBox');
+  if (!retryBox) {
+    retryBox = document.createElement('div');
+    retryBox.id = 'retryBox';
+    retryBox.style.cssText = 'margin-top:12px;padding:14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:.84rem;color:#1e40af';
+    retryBox.innerHTML = `
+      <p style="margin-bottom:10px">⚠️ Account created but <strong>inactive</strong> — payment required to activate.</p>
+      <button class="btn btn-primary" onclick="openPayment()" style="width:auto;padding:9px 20px">
+        💳 Complete Payment
+      </button>
+    `;
+    $('p-create').querySelector('.card-body').appendChild(retryBox);
+  }
+  retryBox.style.display = 'block';
+}
+function hideRetry() {
+  const b = $('retryBox');
+  if (b) b.style.display = 'none';
 }
 
 /* RESET PASSWORD */
@@ -307,7 +413,7 @@ async function doReset() {
   const newPassword = $('r_pass').value;
   const confirm     = $('r_confirm').value;
   if (!username)               { toast('Username is required.', 'err'); return; }
-  if (!/^[a-zA-Z0-9/]{3,20}$/.test(username)) { toast('Username can only contain letters, numbers, and / (3–20 characters).', 'err'); return; }
+  if (!/^[a-zA-Z0-9/]{3,20}$/.test(username)) { toast('Username: 3–20 chars.', 'err'); return; }
   if (!newPassword)            { toast('New password is required.', 'err'); return; }
   if (newPassword !== confirm) { toast('Passwords do not match.', 'err'); return; }
 

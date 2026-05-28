@@ -2,17 +2,10 @@ import express from 'express';
 import { body, query, param, validationResult } from 'express-validator';
 import { protect } from '../middleware/authMiddleware.js';
 import {
-  createAdmin,
-  getAdmins,
-  deleteAdmin,
-  toggleAdminStatus,
-  authAdmin,
-  getAdminProfile,
-  getDashboard,
-  logout,
-  refreshToken,
-  forgotPassword,
-  resetPassword
+  createAdmin, getAdmins, deleteAdmin, toggleAdminStatus, authAdmin,
+  getAdminProfile, getDashboard, logout, refreshToken, forgotPassword, resetPassword,
+  createSubscription, verifySubscriptionPayment, cancelSubscription,
+  getSubscriptionStatus, handleRazorpayWebhook,
 } from '../controllers/adminController.js';
 
 const router = express.Router();
@@ -101,6 +94,13 @@ router.get('/dashboard',
 );
 
 router.get('/profile', getAdminProfile);
+
+// Razorpay payment & subscription management
+router.post('/razorpay/create-subscription', createSubscription);
+router.post('/razorpay/verify-payment',       verifySubscriptionPayment);
+router.post('/razorpay/cancel',               cancelSubscription);
+router.post('/razorpay/webhook',              handleRazorpayWebhook);
+router.get('/:id/subscription',              getSubscriptionStatus);
 
 // Admin management
 router.route('/')

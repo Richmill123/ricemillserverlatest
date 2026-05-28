@@ -1,4 +1,5 @@
 import asyncHandler from 'express-async-handler';
+import crypto from 'crypto';
 import generateToken, { generateTokenPair, verifyToken } from '../utils/generateToken.js';
 import Admin from '../models/adminModel.js';
 import Order from '../models/orderModel.js';
@@ -9,6 +10,13 @@ import Stock from '../models/stockModel.js';
 import Employee from '../models/employeeModel.js';
 import Income from '../models/incomeModel.js';
 import Purchase from '../models/purchaseModel.js';
+import Razorpay from 'razorpay';
+import { RAZORPAY_CONFIG } from '../config/razorpay.js';
+
+const razorpay = new Razorpay({
+  key_id:     RAZORPAY_CONFIG.KEY_ID,
+  key_secret: RAZORPAY_CONFIG.KEY_SECRET,
+});
 
 // @desc    Create a new admin
 // @route   POST /api/admins
@@ -45,6 +53,7 @@ const createAdmin = asyncHandler(async (req, res) => {
     name,
     username,
     password,
+    active: false,           // ← account inactive until subscription payment is received
     ...(email && { email }),
   });
 
@@ -910,16 +919,193 @@ const todaySummaryTotalOrder = pendingOrdersExcludingToday.totalBags || 0;
   });
 });
 
-export { 
-  createAdmin, 
-  getAdmins, 
-  deleteAdmin, 
-  toggleAdminStatus, 
-  authAdmin, 
+// @desc    Create Razorpay subscription for a new admin
+// @route   POST /api/admins/razorpay/create-subscription
+// @access  Public
+const createSubscription = asyncHandler(async (req, res) => {
+  const { adminId } = req.body;
+  if (!adminId) { res.status(400); throw new Error('adminId is required'); }
+
+  const admin = await Admin.findById(adminId);
+  if (!admin) { res.status(404); throw new Error('Admin not found'); }
+
+  if (!RAZORPAY_CONFIG.PLAN_ID) {
+    res.status(500);
+    throw new Error('Razorpay PLAN_ID not configured on server');
+  }
+
+  const sub = await razorpay.subscriptions.create({
+    plan_id:         RAZORPAY_CONFIG.PLAN_ID,
+    customer_notify: 1,
+    quantity:        1,
+    total_count:     RAZORPAY_CONFIG.TOTAL_COUNT,
+    notes: { adminId: adminId.toString(), username: admin.username },
+  });
+
+  admin.subscription = { razorpaySubscriptionId: sub.id, status: sub.status };
+  await admin.save({ validateBeforeSave: false });
+
+  res.json({
+    subscriptionId: sub.id,
+    keyId:          RAZORPAY_CONFIG.KEY_ID,
+    amount:         RAZORPAY_CONFIG.AMOUNT,
+    currency:       RAZORPAY_CONFIG.CURRENCY,
+    companyName:    RAZORPAY_CONFIG.COMPANY_NAME,
+    adminName:      admin.name,
+    adminEmail:     admin.email || '',
+  });
+});
+
+// @desc    Verify Razorpay payment and activate admin account
+// @route   POST /api/admins/razorpay/verify-payment
+// @access  Public
+const verifySubscriptionPayment = asyncHandler(async (req, res) => {
+  const { adminId, razorpay_payment_id, razorpay_subscription_id, razorpay_signature } = req.body;
+
+  const expectedSig = crypto
+    .createHmac('sha256', RAZORPAY_CONFIG.KEY_SECRET)
+    .update(`${razorpay_payment_id}|${razorpay_subscription_id}`)
+    .digest('hex');
+
+  if (expectedSig !== razorpay_signature) {
+    res.status(400);
+    throw new Error('Payment verification failed: signature mismatch');
+  }
+
+  const admin = await Admin.findById(adminId);
+  if (!admin) { res.status(404); throw new Error('Admin not found'); }
+
+  admin.active = true;
+  if (!admin.subscription) admin.subscription = {};
+  admin.subscription.status    = 'active';
+  admin.subscription.paymentId = razorpay_payment_id;
+  await admin.save({ validateBeforeSave: false });
+
+  res.json({ success: true, message: 'Account activated successfully', username: admin.username });
+});
+
+// @desc    Cancel subscription and deactivate admin
+// @route   POST /api/admins/razorpay/cancel
+// @access  Public (admin calls from client app)
+const cancelSubscription = asyncHandler(async (req, res) => {
+  const { adminId } = req.body;
+  if (!adminId) { res.status(400); throw new Error('adminId is required'); }
+
+  const admin = await Admin.findById(adminId);
+  if (!admin) { res.status(404); throw new Error('Admin not found'); }
+
+  const subId = admin.subscription?.razorpaySubscriptionId;
+  if (subId) {
+    try {
+      await razorpay.subscriptions.cancel(subId, false);
+    } catch (e) {
+      console.error('[Razorpay] cancel error:', e.message);
+    }
+  }
+
+  admin.active = false;
+  if (!admin.subscription) admin.subscription = {};
+  admin.subscription.status = 'cancelled';
+  await admin.save({ validateBeforeSave: false });
+
+  res.json({ success: true, message: 'Subscription cancelled and account deactivated' });
+});
+
+// @desc    Get subscription status for an admin
+// @route   GET /api/admins/:id/subscription
+// @access  Public
+const getSubscriptionStatus = asyncHandler(async (req, res) => {
+  const admin = await Admin.findById(req.params.id).select('name username active subscription createdAt');
+  if (!admin) { res.status(404); throw new Error('Admin not found'); }
+
+  let live = null;
+  if (admin.subscription?.razorpaySubscriptionId) {
+    try {
+      const s = await razorpay.subscriptions.fetch(admin.subscription.razorpaySubscriptionId);
+      live = {
+        status:      s.status,
+        currentEnd:  s.current_end  ? new Date(s.current_end  * 1000) : null,
+        nextBilling: s.charge_at    ? new Date(s.charge_at    * 1000) : null,
+      };
+    } catch (_) { /* ignore */ }
+  }
+
+  res.json({
+    active:       admin.active,
+    subscription: admin.subscription || null,
+    live,
+    amount:       RAZORPAY_CONFIG.AMOUNT / 100,
+    currency:     RAZORPAY_CONFIG.CURRENCY,
+    createdAt:    admin.createdAt,
+    keyId:        RAZORPAY_CONFIG.KEY_ID,
+  });
+});
+
+// @desc    Razorpay webhook — auto activate/deactivate on subscription events
+// @route   POST /api/admins/razorpay/webhook
+// @access  Public (called by Razorpay)
+const handleRazorpayWebhook = asyncHandler(async (req, res) => {
+  const signature = req.headers['x-razorpay-signature'];
+  if (RAZORPAY_CONFIG.WEBHOOK_SECRET && signature) {
+    const raw = req.rawBody ? req.rawBody.toString() : JSON.stringify(req.body);
+    const expected = crypto
+      .createHmac('sha256', RAZORPAY_CONFIG.WEBHOOK_SECRET)
+      .update(raw)
+      .digest('hex');
+    if (expected !== signature) {
+      res.status(400); throw new Error('Invalid webhook signature');
+    }
+  }
+
+  const { event, payload } = req.body;
+  const subEntity = payload?.subscription?.entity;
+  if (!subEntity) { res.json({ status: 'ok' }); return; }
+
+  const admin = await Admin.findOne({ 'subscription.razorpaySubscriptionId': subEntity.id });
+  if (!admin) { res.json({ status: 'ok' }); return; }
+
+  switch (event) {
+    case 'subscription.activated':
+    case 'subscription.charged':
+      admin.active = true;
+      admin.subscription.status = 'active';
+      if (subEntity.current_end) {
+        admin.subscription.nextBillingAt = new Date(subEntity.current_end * 1000);
+      }
+      break;
+    case 'subscription.halted':
+      admin.active = false;
+      admin.subscription.status = 'halted';
+      break;
+    case 'subscription.cancelled':
+    case 'subscription.completed':
+      admin.active = false;
+      admin.subscription.status = event === 'subscription.cancelled' ? 'cancelled' : 'completed';
+      break;
+    case 'subscription.paused':
+      admin.subscription.status = 'paused';
+      break;
+  }
+
+  await admin.save({ validateBeforeSave: false });
+  res.json({ status: 'ok' });
+});
+
+export {
+  createAdmin,
+  getAdmins,
+  deleteAdmin,
+  toggleAdminStatus,
+  authAdmin,
   getAdminProfile,
   getDashboard,
   forgotPassword,
   resetPassword,
   refreshToken,
-  logout
+  logout,
+  createSubscription,
+  verifySubscriptionPayment,
+  cancelSubscription,
+  getSubscriptionStatus,
+  handleRazorpayWebhook,
 };

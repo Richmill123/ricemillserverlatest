@@ -67,6 +67,15 @@ const adminSchema = new mongoose.Schema(
     twoFactorSecret: {
       type: String,
     },
+    subscription: {
+      razorpaySubscriptionId: { type: String },
+      status: {
+        type: String,
+        enum: ['created','authenticated','active','paused','halted','cancelled','completed','expired'],
+      },
+      nextBillingAt: { type: Date },
+      paymentId:     { type: String },
+    },
   },
   {
     timestamps: true,
