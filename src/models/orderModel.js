@@ -42,14 +42,6 @@ const orderSchema = new mongoose.Schema(
     status: {
       type: String,
       required: true,
-      enum: [
-        'CREATED',
-        'INITIAL STOCKING',
-        'BOILING PROCESS COMPLETED',
-        'SPLITTING PROCESS COMPLETED',
-        'PACKED & READY',
-        'PAID & CLOSE',
-      ],
       default: 'CREATED',
     },
     splittingincome: {

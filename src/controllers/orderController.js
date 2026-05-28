@@ -1,6 +1,18 @@
 import Order from '../models/orderModel.js';
 import asyncHandler from 'express-async-handler';
 
+const STATUS_MIGRATION = {
+  'BOILING': 'BOILING PROCESS COMPLETED',
+  'SPLITTING': 'SPLITTING PROCESS COMPLETED',
+  'PACKING': 'PACKED & READY',
+  'PACKING PROCESS COMPLETED': 'PACKED & READY',
+};
+
+const normalizeStatus = (status) => {
+  if (!status) return status;
+  return STATUS_MIGRATION[status] ?? status;
+};
+
 // @desc    Create a new order
 // @route   POST /api/orders
 // @access  Private
@@ -44,7 +56,7 @@ const createOrder = asyncHandler(async (req, res) => {
     advanceAmount,
     typeOfPaddy,
     clientId,
-    status,
+    status: normalizeStatus(status),
     splittingincome,
     ...(parsedCreatedAt ? { createdAt: parsedCreatedAt } : {}),
   });
@@ -124,7 +136,8 @@ const updateOrder = asyncHandler(async (req, res) => {
   if (advanceAmount) order.advanceAmount = advanceAmount;
   if (typeOfPaddy) order.typeOfPaddy = typeOfPaddy;
   if (numberOfBags) order.numberOfBags = numberOfBags;
-  if (status) order.status = status;
+  const resolvedStatus = normalizeStatus(status);
+  if (resolvedStatus) order.status = resolvedStatus;
   if (splittingincome) order.splittingincome = splittingincome; 
 
   const updatedOrder = await order.save();
