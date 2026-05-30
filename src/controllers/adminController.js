@@ -53,7 +53,7 @@ const createAdmin = asyncHandler(async (req, res) => {
     name,
     username,
     password,
-    active: false,           // ← account inactive until subscription payment is received
+    active: true,            // ← payment disabled; accounts activate immediately
     ...(email && { email }),
   });
 
