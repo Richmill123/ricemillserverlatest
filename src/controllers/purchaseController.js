@@ -10,6 +10,7 @@ const createPurchase = asyncHandler(async (req, res) => {
     items,
     totalAmount,
     paymentStatus,
+    paidAmount,
     date,
     clientId,
     createdAt,
@@ -54,6 +55,7 @@ const createPurchase = asyncHandler(async (req, res) => {
     items,
     totalAmount: totalAmount ?? computedTotal,
     paymentStatus: paymentStatus || 'pending',
+    paidAmount: paymentStatus === 'paid' ? (totalAmount ?? computedTotal) : (Number(paidAmount) || 0),
     purchaseDate: date ? new Date(date) : Date.now(),
     clientId,
     recordedBy: req.user?._id,
@@ -109,6 +111,7 @@ const updatePurchase = asyncHandler(async (req, res) => {
     items,
     totalAmount,
     paymentStatus,
+    paidAmount,
     date,
   } = req.body;
 
@@ -125,7 +128,16 @@ const updatePurchase = asyncHandler(async (req, res) => {
   }
 
   if (supplier) purchase.supplier = supplier.trim();
-  if (paymentStatus) purchase.paymentStatus = paymentStatus;
+  if (paymentStatus) {
+    purchase.paymentStatus = paymentStatus;
+    if (paymentStatus === 'paid') {
+      purchase.paidAmount = purchase.totalAmount;
+    } else if (paidAmount !== undefined) {
+      purchase.paidAmount = Number(paidAmount) || 0;
+    }
+  } else if (paidAmount !== undefined) {
+    purchase.paidAmount = Number(paidAmount) || 0;
+  }
   if (date) purchase.purchaseDate = new Date(date);
 
   if (items && items.length > 0) {

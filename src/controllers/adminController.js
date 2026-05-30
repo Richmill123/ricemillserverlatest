@@ -353,6 +353,9 @@ const rangeEnd = endDate
     pendingOrdersAgg,
     pendingPurchasesAgg,
     pendingSalesAgg,
+    pendingWagesAgg,
+    partialSalesRevenueAgg,
+    purchasePaidAgg,
   ] = await Promise.all([
     Order.aggregate([
       {
@@ -586,18 +589,40 @@ const rangeEnd = endDate
         },
       },
     ]),
-    // Purchases in date range (contributes to expense)
+    // Purchases in date range (expense = only paid portion)
     Purchase.aggregate([
       { $match: { clientId: clientIdTrimmed, purchaseDate: createdAtFilter } },
-      { $group: { _id: null, totalAmount: { $sum: '$totalAmount' }, count: { $sum: 1 } } },
+      {
+        $group: {
+          _id: null,
+          totalAmount: {
+            $sum: {
+              $cond: {
+                if: { $eq: ['$paymentStatus', 'paid'] },
+                then: '$totalAmount',
+                else: { $ifNull: ['$paidAmount', 0] },
+              },
+            },
+          },
+          count: { $sum: 1 },
+        },
+      },
     ]),
-    // Yearly purchases by month
+    // Yearly purchases by month (expense = only paid portion)
     Purchase.aggregate([
       { $match: { clientId: clientIdTrimmed, purchaseDate: { $gte: yearStart, $lt: yearEndExclusive } } },
       {
         $group: {
           _id: monthFilter ? null : { $month: '$purchaseDate' },
-          totalAmount: { $sum: '$totalAmount' },
+          totalAmount: {
+            $sum: {
+              $cond: {
+                if: { $eq: ['$paymentStatus', 'paid'] },
+                then: '$totalAmount',
+                else: { $ifNull: ['$paidAmount', 0] },
+              },
+            },
+          },
         },
       },
     ]),
@@ -617,7 +642,7 @@ const rangeEnd = endDate
         },
       },
     ]),
-    // Pending purchases: not fully paid
+    // Pending purchases: remaining unpaid amount (totalAmount - paidAmount)
     Purchase.aggregate([
       {
         $match: {
@@ -628,7 +653,9 @@ const rangeEnd = endDate
       {
         $group: {
           _id: null,
-          totalPending: { $sum: '$totalAmount' },
+          totalPending: {
+            $sum: { $subtract: ['$totalAmount', { $ifNull: ['$paidAmount', 0] }] },
+          },
           count: { $sum: 1 },
         },
       },
@@ -645,6 +672,58 @@ const rangeEnd = endDate
         $group: {
           _id: null,
           totalPending: { $sum: '$mydebt' },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+    // Pending wages: balance not yet paid to workers
+    Wage.aggregate([
+      {
+        $match: {
+          clientId: clientIdTrimmed,
+          balanceWage: { $gt: 0 },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalPending: { $sum: '$balanceWage' },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+    // Purchase paid amount: sum of paid portion across all purchases for this client
+    Purchase.aggregate([
+      { $match: { clientId: clientIdTrimmed } },
+      {
+        $group: {
+          _id: null,
+          totalPaid: {
+            $sum: {
+              $cond: {
+                if: { $eq: ['$paymentStatus', 'paid'] },
+                then: '$totalAmount',
+                else: { $ifNull: ['$paidAmount', 0] },
+              },
+            },
+          },
+        },
+      },
+    ]),
+    // Partial sales: amount already received (totalAmount - mydebt) for Partially Paid sales
+    Sale.aggregate([
+      {
+        $match: {
+          ...saleMatch,
+          paymentStatus: 'Partially Paid',
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalReceived: {
+            $sum: { $subtract: ['$totalAmount', { $ifNull: ['$mydebt', 0] }] },
+          },
           count: { $sum: 1 },
         },
       },
@@ -703,15 +782,19 @@ const salesByItemType = {
 
   const purchaseRange = purchaseRangeAgg?.[0] || { totalAmount: 0, count: 0 };
 
-  const revenueOrders  = paidOrders.totalAmount    || 0;
-  const revenueSales   = paidSales.totalAmount      || 0;
-  const revenueIncome  = incomes.totalIncome        || 0;
-  const revenueTotal   = revenueOrders + revenueSales + revenueIncome;
+  const revenueOrders        = paidOrders.totalAmount                       || 0;
+  const revenueFullSales     = paidSales.totalAmount                        || 0;
+  const revenuePartialSales  = partialSalesRevenueAgg?.[0]?.totalReceived   || 0;
+  const revenueSales         = revenueFullSales + revenuePartialSales;
+  const revenueIncome        = incomes.totalIncome                          || 0;
+  const revenueTotal         = revenueOrders + revenueSales + revenueIncome;
 
   const pendingOrderAmount    = pendingOrdersAgg?.[0]?.totalPending    || 0;
   const pendingPurchaseAmount = pendingPurchasesAgg?.[0]?.totalPending || 0;
   const pendingSaleAmount     = pendingSalesAgg?.[0]?.totalPending     || 0;
-  const pendingTotal          = pendingOrderAmount + pendingPurchaseAmount + pendingSaleAmount;
+  const pendingWagesAmount    = pendingWagesAgg?.[0]?.totalPending     || 0;
+  const purchasePaidAmount    = purchasePaidAgg?.[0]?.totalPaid        || 0;
+  const pendingTotal          = pendingOrderAmount + pendingPurchaseAmount + pendingSaleAmount + pendingWagesAmount;
 
   const expenseWages    = wages.totalWage         || 0;
   const expenseSalary   = salaries.totalSalary    || 0;
@@ -792,6 +875,7 @@ const todaySummaryTotalOrder = pendingOrdersExcludingToday.totalBags || 0;
       revenue: {
         orders: revenueOrders,
         sales: revenueSales,
+        income: revenueIncome,
         total: revenueTotal,
       },
       expense: {
@@ -804,7 +888,9 @@ const todaySummaryTotalOrder = pendingOrdersExcludingToday.totalBags || 0;
       pending: {
         orders: pendingOrderAmount,
         purchases: pendingPurchaseAmount,
+        purchasePaid: purchasePaidAmount,
         sales: pendingSaleAmount,
+        wages: pendingWagesAmount,
         total: pendingTotal,
       },
       profit: revenueTotal - expenseTotal,
@@ -879,6 +965,7 @@ const todaySummaryTotalOrder = pendingOrdersExcludingToday.totalBags || 0;
     revenue: {
       orders: revenueOrders,
       sales: revenueSales,
+      income: revenueIncome,
       total: revenueTotal,
     },
     expense: {
