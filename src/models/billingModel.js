@@ -34,7 +34,6 @@ const billingSchema = new mongoose.Schema(
     invoiceNo: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
     },
     billNumber: {
@@ -76,7 +75,7 @@ const billingSchema = new mongoose.Schema(
   }
 );
 
-billingSchema.index({ invoiceNo: 1, clientId: 1 });
+billingSchema.index({ invoiceNo: 1, clientId: 1 }, { unique: true });
 billingSchema.index({ invoiceDate: -1, clientId: 1 });
 
 const Billing = mongoose.model('Billing', billingSchema);

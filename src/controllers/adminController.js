@@ -1,5 +1,6 @@
 import asyncHandler from 'express-async-handler';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import generateToken, { generateTokenPair, verifyToken } from '../utils/generateToken.js';
 import Admin from '../models/adminModel.js';
 import Order from '../models/orderModel.js';
@@ -203,7 +204,10 @@ const refreshToken = asyncHandler(async (req, res) => {
   }
 
   try {
-    const decoded = verifyToken(token);
+    const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET, {
+      issuer: process.env.JWT_ISSUER || 'rice-mill-api',
+      audience: process.env.JWT_AUDIENCE || 'rice-mill-client',
+    });
     const admin = await Admin.findById(decoded.id).select('-password');
 
     if (!admin || !admin.active) {
@@ -356,6 +360,8 @@ const rangeEnd = endDate
     pendingWagesAgg,
     partialSalesRevenueAgg,
     purchasePaidAgg,
+    advanceOrdersAgg,
+    yearAdvanceOrdersAgg,
   ] = await Promise.all([
     Order.aggregate([
       {
@@ -728,6 +734,39 @@ const rangeEnd = endDate
         },
       },
     ]),
+    // Advance collected from orders not yet PAID & CLOSE — counts as received revenue
+    Order.aggregate([
+      {
+        $match: {
+          ...orderMatch,
+          status: { $ne: 'PAID & CLOSE' },
+          advanceAmount: { $gt: 0 },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalAdvance: { $sum: '$advanceAmount' },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+    // Yearly/monthly advance from non-PAID & CLOSE orders, grouped by month
+    Order.aggregate([
+      {
+        $match: {
+          ...yearMatch,
+          status: { $ne: 'PAID & CLOSE' },
+          advanceAmount: { $gt: 0 },
+        },
+      },
+      {
+        $group: {
+          _id: monthFilter ? null : { $month: '$createdAt' },
+          totalAdvance: { $sum: '$advanceAmount' },
+        },
+      },
+    ]),
   ]);
 
   const paidOrders = paidOrderAgg?.[0] || { totalAmount: 0, totalBags: 0, count: 0 };
@@ -782,7 +821,8 @@ const salesByItemType = {
 
   const purchaseRange = purchaseRangeAgg?.[0] || { totalAmount: 0, count: 0 };
 
-  const revenueOrders        = paidOrders.totalAmount                       || 0;
+  const revenueAdvanceOrders = advanceOrdersAgg?.[0]?.totalAdvance          || 0;
+  const revenueOrders        = (paidOrders.totalAmount || 0) + revenueAdvanceOrders;
   const revenueFullSales     = paidSales.totalAmount                        || 0;
   const revenuePartialSales  = partialSalesRevenueAgg?.[0]?.totalReceived   || 0;
   const revenueSales         = revenueFullSales + revenuePartialSales;
@@ -842,8 +882,8 @@ const todaySummaryTotalOrder = pendingOrdersExcludingToday.totalBags || 0;
     };
 
     // Set single month data from aggregations
-    if (yearPaidOrdersAgg?.[0]) {
-      singleMonthData.revenue.orders = yearPaidOrdersAgg[0].totalAmount || 0;
+    if (yearPaidOrdersAgg?.[0] || yearAdvanceOrdersAgg?.[0]) {
+      singleMonthData.revenue.orders = (yearPaidOrdersAgg?.[0]?.totalAmount || 0) + (yearAdvanceOrdersAgg?.[0]?.totalAdvance || 0);
     }
     if (yearPaidSalesAgg?.[0]) {
       singleMonthData.revenue.sales = yearPaidSalesAgg[0].totalAmount || 0;
@@ -923,6 +963,10 @@ const todaySummaryTotalOrder = pendingOrdersExcludingToday.totalBags || 0;
   for (const row of yearPaidOrdersAgg || []) {
     const idx = (row._id || 0) - 1;
     if (yearMonths[idx]) yearMonths[idx].revenue.orders = row.totalAmount || 0;
+  }
+  for (const row of yearAdvanceOrdersAgg || []) {
+    const idx = (row._id || 0) - 1;
+    if (yearMonths[idx]) yearMonths[idx].revenue.orders = (yearMonths[idx].revenue.orders || 0) + (row.totalAdvance || 0);
   }
   for (const row of yearPaidSalesAgg || []) {
     const idx = (row._id || 0) - 1;

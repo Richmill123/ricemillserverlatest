@@ -77,8 +77,16 @@ const createInvoice = asyncHandler(async (req, res) => {
     ...(parsedCreatedAt ? { createdAt: parsedCreatedAt } : {}),
   });
 
-  const createdInvoice = await invoice.save();
-  res.status(201).json(createdInvoice);
+  try {
+    const createdInvoice = await invoice.save();
+    res.status(201).json(createdInvoice);
+  } catch (err) {
+    if (err.code === 11000) {
+      res.status(409);
+      throw new Error('Invoice number conflict — please retry');
+    }
+    throw err;
+  }
 });
 
 // @desc    Get all invoices

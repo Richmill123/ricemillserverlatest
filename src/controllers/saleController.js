@@ -13,7 +13,7 @@ const createSale = asyncHandler(async (req, res) => {
     items,
     paymentStatus,
     paymentMethod,
-    mydebt,
+    partialAmountPaid,
     clientId,
   } = req.body;
 
@@ -26,6 +26,17 @@ const createSale = asyncHandler(async (req, res) => {
   const totalAmount = items.reduce((total, item) => {
     return total + (item.quantity * item.rate);
   }, 0);
+
+  // Derive mydebt from paymentStatus
+  let mydebt;
+  if (paymentStatus === 'Paid') {
+    mydebt = 0;
+  } else if (paymentStatus === 'Partially Paid') {
+    const paid = Number(partialAmountPaid) || 0;
+    mydebt = totalAmount - paid;
+  } else {
+    mydebt = totalAmount; // Pending — full amount is debt
+  }
 
   const sale = new Sale({
     name,

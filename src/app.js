@@ -135,7 +135,8 @@ app.use((err, req, res, next) => {
   // Don't expose stack traces in production
   const isDevelopment = process.env.NODE_ENV === 'development';
   
-  res.status(err.status || 500).json({ 
+  const statusCode = err.status || (res.statusCode !== 200 ? res.statusCode : 500);
+  res.status(statusCode).json({
     error: 'Internal Server Error',
     message: isDevelopment ? err.message : 'Something went wrong!',
     timestamp: new Date().toISOString(),
