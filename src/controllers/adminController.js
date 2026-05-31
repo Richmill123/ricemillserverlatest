@@ -359,8 +359,8 @@ const rangeEnd = endDate
     pendingPurchasesAgg,
     pendingSalesAgg,
     pendingWagesAgg,
-    partialSalesRevenueAgg,
     purchasePaidAgg,
+    partialSalesRevenueAgg,
     advanceOrdersAgg,
     yearAdvanceOrdersAgg,
   ] = await Promise.all([
