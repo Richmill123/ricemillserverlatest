@@ -76,25 +76,20 @@ const updateEmployee = asyncHandler(async (req, res) => {
     throw new Error('Employee not found or does not belong to this client');
   }
 
-  if (employee) {
-    employee.name = req.body.name || employee.name;
-    employee.gender = req.body.gender || employee.gender;
-    employee.address = req.body.address || employee.address;
-    employee.dob = req.body.dob || employee.dob;
-    employee.phoneNumber = req.body.phoneNumber || employee.phoneNumber;
-    employee.emergencyContactNumber = req.body.emergencyContactNumber || employee.emergencyContactNumber;
-    employee.maritalStatus = req.body.maritalStatus || employee.maritalStatus;
-    employee.salary = req.body.salary || employee.salary;
-    employee.advanceAmount = req.body.advanceAmount || employee.advanceAmount;
-    employee.debtAmount = req.body.debtAmount || employee.debtAmount;
-    employee.isActive = req.body.isActive !== undefined ? req.body.isActive : employee.isActive;
+  if (req.body.name !== undefined) employee.name = req.body.name;
+  if (req.body.gender !== undefined) employee.gender = req.body.gender;
+  if (req.body.address !== undefined) employee.address = req.body.address;
+  if (req.body.dob !== undefined) employee.dob = req.body.dob;
+  if (req.body.phoneNumber !== undefined) employee.phoneNumber = req.body.phoneNumber;
+  if (req.body.emergencyContactNumber !== undefined) employee.emergencyContactNumber = req.body.emergencyContactNumber;
+  if (req.body.maritalStatus !== undefined) employee.maritalStatus = req.body.maritalStatus;
+  if (req.body.salary !== undefined) employee.salary = req.body.salary;
+  if (req.body.advanceAmount !== undefined) employee.advanceAmount = req.body.advanceAmount;
+  if (req.body.debtAmount !== undefined) employee.debtAmount = req.body.debtAmount;
+  if (req.body.isActive !== undefined) employee.isActive = req.body.isActive;
 
-    const updatedEmployee = await employee.save();
-    res.json(updatedEmployee);
-  } else {
-    res.status(404);
-    throw new Error('Employee not found');
-  }
+  const updatedEmployee = await employee.save();
+  res.json(updatedEmployee);
 });
 
 // @desc    Delete an employee
@@ -115,13 +110,8 @@ const deleteEmployee = asyncHandler(async (req, res) => {
     throw new Error('Employee not found or does not belong to this client');
   }
 
-  if (employee) {
-    await employee.deleteOne({ _id: req.params.id });
-    res.json({ message: 'Employee removed' });
-  } else {
-    res.status(404);
-    throw new Error('Employee not found');
-  }
+  await employee.deleteOne();
+  res.json({ message: 'Employee removed' });
 });
 
 export {

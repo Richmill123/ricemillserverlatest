@@ -55,26 +55,13 @@ const createSale = asyncHandler(async (req, res) => {
     paymentMethod: paymentMethod || 'Cash',
   });
 
-  // Update stock for each item
+  // Update stock for each item — best-effort (sale is not blocked if stock not yet initialised)
   for (const item of items) {
-    const stockItem = await Stock.findOne({ 
-      itemType: item.itemType, 
-      clientId 
-    });
-
-    if (!stockItem) {
-      res.status(404);
-      throw new Error(`Item type ${item.itemType} not found in stock`);
+    const stockItem = await Stock.findOne({ itemType: item.itemType, clientId });
+    if (stockItem) {
+      stockItem.availableQuantity = Math.max(0, stockItem.availableQuantity - item.quantity);
+      await stockItem.save();
     }
-
-    if (stockItem.availableQuantity < item.quantity) {
-      res.status(400);
-      throw new Error(`Insufficient stock for ${item.itemType}. Available: ${stockItem.availableQuantity}`);
-    }
-
-    // Update stock quantity
-    stockItem.availableQuantity -= item.quantity;
-    await stockItem.save();
   }
 
   const createdSale = await sale.save();
@@ -157,49 +144,33 @@ const updateSale = asyncHandler(async (req, res) => {
   }
 
   // Update basic info
-  if (name) sale.name = name;
-  if (phoneNumber) sale.phoneNumber = phoneNumber;
-  if (address) sale.address = address;
-  if (mydebt) sale.mydebt = mydebt;
-  
-  // Update payment info
-  if (paymentStatus) sale.paymentStatus = paymentStatus;
-  if (paymentMethod) sale.paymentMethod = paymentMethod;
+  if (name !== undefined) sale.name = name;
+  if (phoneNumber !== undefined) sale.phoneNumber = phoneNumber;
+  if (address !== undefined) sale.address = address;
+  if (mydebt !== undefined) sale.mydebt = mydebt;
 
-  // If updating items, handle stock adjustments
+  // Update payment info
+  if (paymentStatus !== undefined) sale.paymentStatus = paymentStatus;
+  if (paymentMethod !== undefined) sale.paymentMethod = paymentMethod;
+
+  // If updating items, handle stock adjustments (best-effort)
   if (items && Array.isArray(items)) {
-    // First, return all items to stock
+    // Return old items back to stock
     for (const oldItem of sale.items) {
-      const stockItem = await Stock.findOne({ 
-        itemType: oldItem.itemType, 
-        clientId 
-      });
-      
+      const stockItem = await Stock.findOne({ itemType: oldItem.itemType, clientId });
       if (stockItem) {
-        stockItem.quantity += oldItem.quantity;
+        stockItem.availableQuantity += oldItem.quantity;
         await stockItem.save();
       }
     }
 
-    // Then, process new items
+    // Deduct new items from stock
     for (const newItem of items) {
-      const stockItem = await Stock.findOne({ 
-        itemType: newItem.itemType, 
-        clientId 
-      });
-
-      if (!stockItem) {
-        res.status(404);
-        throw new Error(`Item type ${newItem.itemType} not found in stock`);
+      const stockItem = await Stock.findOne({ itemType: newItem.itemType, clientId });
+      if (stockItem) {
+        stockItem.availableQuantity = Math.max(0, stockItem.availableQuantity - newItem.quantity);
+        await stockItem.save();
       }
-
-      if (stockItem.availableQuantity < newItem.quantity) {
-        res.status(400);
-        throw new Error(`Insufficient stock for ${newItem.itemType}. Available: ${stockItem.availableQuantity}`);
-      }
-
-      stockItem.availableQuantity -= newItem.quantity;
-      await stockItem.save();
     }
 
     // Update sale items
@@ -238,22 +209,17 @@ const deleteSale = asyncHandler(async (req, res) => {
     throw new Error('Sale not found or does not belong to this client');
   }
 
-  if (sale) {
-    // Return items to stock if sale is deleted
-    for (const item of sale.items) {
-      const stockItem = await Stock.findOne({ itemType: item.itemType });
-      if (stockItem) {
-        stockItem.availableQuantity += item.quantity;
-        await stockItem.save();
-      }
+  // Return items to stock on deletion (best-effort)
+  for (const item of sale.items) {
+    const stockItem = await Stock.findOne({ itemType: item.itemType, clientId });
+    if (stockItem) {
+      stockItem.availableQuantity += item.quantity;
+      await stockItem.save();
     }
-    
-    await sale.deleteOne({ _id: req.params.id });
-    res.json({ message: 'Sale removed' });
-  } else {
-    res.status(404);
-    throw new Error('Sale not found');
   }
+
+  await sale.deleteOne();
+  res.json({ message: 'Sale removed' });
 });
 
 export {

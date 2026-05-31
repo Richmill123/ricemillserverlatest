@@ -111,13 +111,13 @@ const updateIncome  = asyncHandler(async (req, res) => {
     throw new Error('Income not found or does not belong to this client');
   }
 
-  income.item = item || income.item;
-  income.description = description || income.description;
-  income.amount = amount ?? income.amount;
-  income.category = category || income.category;
-  income.date = date || income.date;
-  income.paymentMethod = paymentMethod || income.paymentMethod;
-  income.receiptNumber = receiptNumber || income.receiptNumber;
+  if (item !== undefined) income.item = item;
+  if (description !== undefined) income.description = description;
+  if (amount !== undefined) income.amount = amount;
+  if (category !== undefined) income.category = category;
+  if (date !== undefined) income.date = date;
+  if (paymentMethod !== undefined) income.paymentMethod = paymentMethod;
+  if (receiptNumber !== undefined) income.receiptNumber = receiptNumber;
 
   const updatedIncome = await income.save();
   res.json(updatedIncome);

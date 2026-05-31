@@ -112,21 +112,16 @@ const updateExpense = asyncHandler(async (req, res) => {
     throw new Error('Expense not found or does not belong to this client');
   }
 
-  if (expense) {
-    expense.item = item || expense.item;
-    expense.description = description || expense.description;
-    expense.amount = amount || expense.amount;
-    expense.category = category || expense.category;
-    expense.date = date || expense.date;
-    expense.paymentMethod = paymentMethod || expense.paymentMethod;
-    expense.receiptNumber = receiptNumber || expense.receiptNumber;
+  if (item !== undefined) expense.item = item;
+  if (description !== undefined) expense.description = description;
+  if (amount !== undefined) expense.amount = amount;
+  if (category !== undefined) expense.category = category;
+  if (date !== undefined) expense.date = date;
+  if (paymentMethod !== undefined) expense.paymentMethod = paymentMethod;
+  if (receiptNumber !== undefined) expense.receiptNumber = receiptNumber;
 
-    const updatedExpense = await expense.save();
-    res.json(updatedExpense);
-  } else {
-    res.status(404);
-    throw new Error('Expense not found');
-  }
+  const updatedExpense = await expense.save();
+  res.json(updatedExpense);
 });
 
 // @desc    Delete an expense
@@ -147,13 +142,8 @@ const deleteExpense = asyncHandler(async (req, res) => {
     throw new Error('Expense not found or does not belong to this client');
   }
 
-  if (expense) {
-    await expense.deleteOne({ _id: req.params.id });
-    res.json({ message: 'Expense removed' });
-  } else {
-    res.status(404);
-    throw new Error('Expense not found');
-  }
+  await expense.deleteOne();
+  res.json({ message: 'Expense removed' });
 });
 
 

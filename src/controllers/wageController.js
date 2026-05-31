@@ -38,13 +38,13 @@ const createWage = asyncHandler(async (req, res) => {
   const wage = new Wage({
     employeeId,
     employeeName,
-    advanceWage: advanceWage || 0,
+    advanceWage: Number(advanceWage) || 0,
     totalWage,
-    bags: bags || 0,
+    bags: Number(bags) || 0,
     typeOfWork,
     machineType,
-    advanceamount,
-    advancedebtamount,
+    advanceamount: Number(advanceamount) || 0,
+    advancedebtamount: Number(advancedebtamount) || 0,
     date,
     note,
     clientId,
@@ -83,7 +83,7 @@ const getWages = asyncHandler(async (req, res) => {
     }
   }
 
-  const wages = await Wage.find(query).populate('employeeId', 'name phoneNumber');
+  const wages = await Wage.find(query);
   res.json(wages);
 });
 
@@ -105,21 +105,16 @@ const updateWage = asyncHandler(async (req, res) => {
     throw new Error('Wage record not found or does not belong to this client');
   }
 
-  if (wage) {
-    wage.advanceWage = advanceWage !== undefined ? advanceWage : wage.advanceWage;
-    wage.totalWage = totalWage || wage.totalWage;
-    wage.bags = bags !== undefined ? bags : wage.bags;
-    wage.typeOfWork = typeOfWork || wage.typeOfWork;
-    wage.machineType = machineType || wage.machineType;
-    wage.advanceamount = advanceamount || wage.advanceamount;
-    wage.advancedebtamount = advancedebtamount || wage.advancedebtamount;
-    wage.note = note || wage.note;
-    const updatedWage = await wage.save();
-    res.json(updatedWage);
-  } else {
-    res.status(404);
-    throw new Error('Wage record not found');
-  }
+  wage.advanceWage = advanceWage !== undefined ? advanceWage : wage.advanceWage;
+  wage.totalWage = totalWage !== undefined ? totalWage : wage.totalWage;
+  wage.bags = bags !== undefined ? bags : wage.bags;
+  wage.typeOfWork = typeOfWork ?? wage.typeOfWork;
+  wage.machineType = machineType ?? wage.machineType;
+  wage.advanceamount = advanceamount !== undefined ? advanceamount : wage.advanceamount;
+  wage.advancedebtamount = advancedebtamount !== undefined ? advancedebtamount : wage.advancedebtamount;
+  wage.note = note !== undefined ? note : wage.note;
+  const updatedWage = await wage.save();
+  res.json(updatedWage);
 });
 
 // @desc    Delete wage record
@@ -140,13 +135,8 @@ const deleteWage = asyncHandler(async (req, res) => {
     throw new Error('Wage record not found or does not belong to this client');
   }
 
-  if (wage) {
-    await wage.deleteOne({ _id: req.params.id });
-    res.json({ message: 'Wage record removed' });
-  } else {
-    res.status(404);
-    throw new Error('Wage record not found');
-  }
+  await wage.deleteOne();
+  res.json({ message: 'Wage record removed' });
 });
 
 export {

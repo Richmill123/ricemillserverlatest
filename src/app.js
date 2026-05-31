@@ -136,9 +136,11 @@ app.use((err, req, res, next) => {
   const isDevelopment = process.env.NODE_ENV === 'development';
   
   const statusCode = err.status || (res.statusCode !== 200 ? res.statusCode : 500);
+  const statusMessages = { 400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 409: 'Conflict' };
+  const errorLabel = statusMessages[statusCode] || 'Internal Server Error';
   res.status(statusCode).json({
-    error: 'Internal Server Error',
-    message: isDevelopment ? err.message : 'Something went wrong!',
+    error: errorLabel,
+    message: isDevelopment ? err.message : err.message || 'Something went wrong!',
     timestamp: new Date().toISOString(),
     ...(isDevelopment && { stack: err.stack })
   });

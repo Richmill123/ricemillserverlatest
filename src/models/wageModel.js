@@ -44,7 +44,8 @@ const wageSchema = new mongoose.Schema(
       required: true,
     },
     advancedebtamount: {
-      type: String
+      type: Number,
+      default: 0,
     },
     bags: {
       type: Number,

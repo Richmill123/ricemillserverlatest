@@ -127,18 +127,17 @@ const updateOrder = asyncHandler(async (req, res) => {
     throw new Error('Order not found or does not belong to this client');
   }
 
-  // Update all fields if they exist in the request
-  if (name) order.name = name;
-  if (villageName) order.villageName = villageName;
-  if (address) order.address = address;
-  if (phoneNumber) order.phoneNumber = phoneNumber;
-  if (totalAmount) order.totalAmount = totalAmount;
-  if (advanceAmount) order.advanceAmount = advanceAmount;
-  if (typeOfPaddy) order.typeOfPaddy = typeOfPaddy;
-  if (numberOfBags) order.numberOfBags = numberOfBags;
+  if (name !== undefined) order.name = name;
+  if (villageName !== undefined) order.villageName = villageName;
+  if (address !== undefined) order.address = address;
+  if (phoneNumber !== undefined) order.phoneNumber = phoneNumber;
+  if (totalAmount !== undefined) order.totalAmount = totalAmount;
+  if (advanceAmount !== undefined) order.advanceAmount = advanceAmount;
+  if (typeOfPaddy !== undefined) order.typeOfPaddy = typeOfPaddy;
+  if (numberOfBags !== undefined) order.numberOfBags = numberOfBags;
   const resolvedStatus = normalizeStatus(status);
-  if (resolvedStatus) order.status = resolvedStatus;
-  if (splittingincome) order.splittingincome = splittingincome; 
+  if (resolvedStatus !== undefined) order.status = resolvedStatus;
+  if (splittingincome !== undefined) order.splittingincome = splittingincome;
 
   const updatedOrder = await order.save();
   res.json(updatedOrder);
@@ -162,13 +161,8 @@ const deleteOrder = asyncHandler(async (req, res) => {
     throw new Error('Order not found or does not belong to this client');
   }
 
-  if (order) {
-    await Order.deleteOne({ _id: req.params.id });
-    res.json({ message: 'Order removed' });
-  } else {
-    res.status(404);
-    throw new Error('Order not found');
-  }
+  await order.deleteOne();
+  res.json({ message: 'Order removed' });
 });
 
 export {
