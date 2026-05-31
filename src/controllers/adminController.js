@@ -346,6 +346,7 @@ const rangeEnd = endDate
     salaryAgg,
     yearPaidOrdersAgg,
     yearPaidSalesAgg,
+    yearPartialSalesAgg,
     yearWagesAgg,
     yearExpensesAgg,
     yearIncomeAgg,
@@ -534,6 +535,28 @@ const rangeEnd = endDate
         },
       },
     ]),
+    // Yearly partial sales — amount received so far for Partially Paid sales
+    Sale.aggregate([
+      {
+        $match: {
+          ...yearMatch,
+          paymentStatus: 'Partially Paid',
+        },
+      },
+      {
+        $group: {
+          _id: monthFilter ? null : { $month: '$createdAt' },
+          totalReceived: {
+            $sum: {
+              $ifNull: [
+                '$partialAmountPaid',
+                { $subtract: ['$totalAmount', { $ifNull: ['$mydebt', 0] }] },
+              ],
+            },
+          },
+        },
+      },
+    ]),
     Wage.aggregate([
       {
         $match: yearMatch,
@@ -666,7 +689,8 @@ const rangeEnd = endDate
         },
       },
     ]),
-    // Pending sales: not paid — use mydebt field
+    // Pending sales: not paid — mydebt is the remaining balance
+    // Fall back to totalAmount for old records where mydebt was not stored
     Sale.aggregate([
       {
         $match: {
@@ -677,7 +701,9 @@ const rangeEnd = endDate
       {
         $group: {
           _id: null,
-          totalPending: { $sum: '$mydebt' },
+          totalPending: {
+            $sum: { $ifNull: ['$mydebt', '$totalAmount'] },
+          },
           count: { $sum: 1 },
         },
       },
@@ -716,7 +742,7 @@ const rangeEnd = endDate
         },
       },
     ]),
-    // Partial sales: amount already received (totalAmount - mydebt) for Partially Paid sales
+    // Partial sales: use stored partialAmountPaid; fall back to totalAmount - mydebt for old records
     Sale.aggregate([
       {
         $match: {
@@ -728,7 +754,12 @@ const rangeEnd = endDate
         $group: {
           _id: null,
           totalReceived: {
-            $sum: { $subtract: ['$totalAmount', { $ifNull: ['$mydebt', 0] }] },
+            $sum: {
+              $ifNull: [
+                '$partialAmountPaid',
+                { $subtract: ['$totalAmount', { $ifNull: ['$mydebt', 0] }] },
+              ],
+            },
           },
           count: { $sum: 1 },
         },
@@ -885,8 +916,8 @@ const todaySummaryTotalOrder = pendingOrdersExcludingToday.totalBags || 0;
     if (yearPaidOrdersAgg?.[0] || yearAdvanceOrdersAgg?.[0]) {
       singleMonthData.revenue.orders = (yearPaidOrdersAgg?.[0]?.totalAmount || 0) + (yearAdvanceOrdersAgg?.[0]?.totalAdvance || 0);
     }
-    if (yearPaidSalesAgg?.[0]) {
-      singleMonthData.revenue.sales = yearPaidSalesAgg[0].totalAmount || 0;
+    if (yearPaidSalesAgg?.[0] || yearPartialSalesAgg?.[0]) {
+      singleMonthData.revenue.sales = (yearPaidSalesAgg?.[0]?.totalAmount || 0) + (yearPartialSalesAgg?.[0]?.totalReceived || 0);
     }
     if (yearWagesAgg?.[0]) {
       singleMonthData.expense.wages = yearWagesAgg[0].totalWage || 0;
@@ -971,6 +1002,10 @@ const todaySummaryTotalOrder = pendingOrdersExcludingToday.totalBags || 0;
   for (const row of yearPaidSalesAgg || []) {
     const idx = (row._id || 0) - 1;
     if (yearMonths[idx]) yearMonths[idx].revenue.sales = row.totalAmount || 0;
+  }
+  for (const row of yearPartialSalesAgg || []) {
+    const idx = (row._id || 0) - 1;
+    if (yearMonths[idx]) yearMonths[idx].revenue.sales = (yearMonths[idx].revenue.sales || 0) + (row.totalReceived || 0);
   }
   for (const row of yearWagesAgg || []) {
     const idx = (row._id || 0) - 1;

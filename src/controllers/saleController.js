@@ -27,15 +27,17 @@ const createSale = asyncHandler(async (req, res) => {
     return total + (item.quantity * item.rate);
   }, 0);
 
-  // Derive mydebt from paymentStatus
-  let mydebt;
+  // Derive mydebt and partialAmountPaid from paymentStatus
+  let mydebt, partialPaid;
   if (paymentStatus === 'Paid') {
     mydebt = 0;
+    partialPaid = totalAmount;
   } else if (paymentStatus === 'Partially Paid') {
-    const paid = Number(partialAmountPaid) || 0;
-    mydebt = totalAmount - paid;
+    partialPaid = Number(partialAmountPaid) || 0;
+    mydebt = totalAmount - partialPaid;
   } else {
-    mydebt = totalAmount; // Pending — full amount is debt
+    mydebt = totalAmount;
+    partialPaid = 0;
   }
 
   const sale = new Sale({
@@ -50,6 +52,7 @@ const createSale = asyncHandler(async (req, res) => {
     })),
     totalAmount,
     mydebt,
+    partialAmountPaid: partialPaid,
     clientId,
     paymentStatus: paymentStatus || 'Pending',
     paymentMethod: paymentMethod || 'Cash',
@@ -120,15 +123,15 @@ const getSales = asyncHandler(async (req, res) => {
 // @route   PUT /api/sales/:id
 // @access  Private
 const updateSale = asyncHandler(async (req, res) => {
-  const { 
+  const {
     name,
     phoneNumber,
     address,
     items,
     paymentStatus,
     paymentMethod,
-    mydebt,
-    clientId 
+    partialAmountPaid,
+    clientId,
   } = req.body;
   
   if (!clientId) {
@@ -147,11 +150,24 @@ const updateSale = asyncHandler(async (req, res) => {
   if (name !== undefined) sale.name = name;
   if (phoneNumber !== undefined) sale.phoneNumber = phoneNumber;
   if (address !== undefined) sale.address = address;
-  if (mydebt !== undefined) sale.mydebt = mydebt;
-
-  // Update payment info
-  if (paymentStatus !== undefined) sale.paymentStatus = paymentStatus;
   if (paymentMethod !== undefined) sale.paymentMethod = paymentMethod;
+
+  // Recompute mydebt and partialAmountPaid when payment status changes
+  if (paymentStatus !== undefined) {
+    sale.paymentStatus = paymentStatus;
+    const total = sale.totalAmount;
+    if (paymentStatus === 'Paid') {
+      sale.mydebt = 0;
+      sale.partialAmountPaid = total;
+    } else if (paymentStatus === 'Partially Paid') {
+      const paid = Number(partialAmountPaid) || 0;
+      sale.partialAmountPaid = paid;
+      sale.mydebt = total - paid;
+    } else {
+      sale.mydebt = total;
+      sale.partialAmountPaid = 0;
+    }
+  }
 
   // If updating items, handle stock adjustments (best-effort)
   if (items && Array.isArray(items)) {

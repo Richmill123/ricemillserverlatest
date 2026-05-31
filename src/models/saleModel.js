@@ -46,6 +46,11 @@ const saleSchema = new mongoose.Schema(
     },
     mydebt: {
       type: Number,
+      default: 0,
+    },
+    partialAmountPaid: {
+      type: Number,
+      default: 0,
     },
     paymentStatus: {
       type: String,
