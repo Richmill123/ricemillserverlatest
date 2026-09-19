@@ -26,6 +26,7 @@ import incomeRoutes from './routes/incomeRoutes.js';
 import purchaseRoutes from './routes/purchaseRoutes.js';
 import billingRoutes from './routes/billingRoutes.js';
 import preferenceRoutes from './routes/preferenceRoutes.js';
+import suspenseRoutes from './routes/suspenseRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -82,6 +83,7 @@ app.use('/api/income', generalRateLimit, incomeRoutes);
 app.use('/api/purchases', generalRateLimit, purchaseRoutes);
 app.use('/api/billing', strictRateLimit, billingRoutes);
 app.use('/api/preferences', generalRateLimit, preferenceRoutes);
+app.use('/api/suspense', generalRateLimit, suspenseRoutes);
 
 
 // Basic route
@@ -98,7 +100,8 @@ app.get('/', (req, res) => {
       income: '/api/income',
       purchases: '/api/purchases',
       billing: '/api/billing',
-      preferences: '/api/preferences'
+      preferences: '/api/preferences',
+      suspense: '/api/suspense'
     }
   });
 });

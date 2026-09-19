@@ -66,21 +66,27 @@ const getWages = asyncHandler(async (req, res) => {
     throw new Error('Client ID is required');
   }
 
- const query = { clientId: clientId.trim() };
-  
-  // Add date filtering if startDate and/or endDate are provided
+  let query = { clientId: clientId.trim() };
+
   if (startDate || endDate) {
-    query.createdAt = {};
+    const dateFilter = {};
     if (startDate) {
       const startOfDay = new Date(startDate);
       startOfDay.setHours(0, 0, 0, 0);
-      query.createdAt.$gte = startOfDay;
+      dateFilter.$gte = startOfDay;
     }
     if (endDate) {
       const endOfDay = new Date(endDate);
       endOfDay.setHours(23, 59, 59, 999);
-      query.createdAt.$lte = endOfDay;
+      dateFilter.$lte = endOfDay;
     }
+    // Always include wages with an unpaid balance, regardless of date
+    query = {
+      $or: [
+        { clientId: clientId.trim(), createdAt: dateFilter },
+        { clientId: clientId.trim(), balanceWage: { $gt: 0 } },
+      ],
+    };
   }
 
   const wages = await Wage.find(query);

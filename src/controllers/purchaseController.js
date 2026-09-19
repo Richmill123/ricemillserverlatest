@@ -77,24 +77,30 @@ const getPurchases = asyncHandler(async (req, res) => {
     throw new Error('Client ID is required');
   }
 
-  const query = { clientId: clientId.trim() };
+  let query = { clientId: clientId.trim() };
 
   if (startDate || endDate) {
-    query.purchaseDate = {};
+    const dateFilter = {};
     if (startDate) {
       const startOfDay = new Date(startDate);
       startOfDay.setHours(0, 0, 0, 0);
-      query.purchaseDate.$gte = startOfDay;
+      dateFilter.$gte = startOfDay;
     }
     if (endDate) {
       const endOfDay = new Date(endDate);
       endOfDay.setHours(23, 59, 59, 999);
-      query.purchaseDate.$lte = endOfDay;
+      dateFilter.$lte = endOfDay;
     }
-  }
-
-  if (supplier) {
-    query.supplier = new RegExp(supplier, 'i');
+    const supplierFilter = supplier ? { supplier: new RegExp(supplier, 'i') } : {};
+    // Always include pending/partial purchases, regardless of date
+    query = {
+      $or: [
+        { clientId: clientId.trim(), purchaseDate: dateFilter, ...supplierFilter },
+        { clientId: clientId.trim(), paymentStatus: { $in: ['pending', 'partial'] }, ...supplierFilter },
+      ],
+    };
+  } else {
+    if (supplier) query.supplier = new RegExp(supplier, 'i');
   }
 
   const purchases = await Purchase.find(query).sort({ purchaseDate: -1 });

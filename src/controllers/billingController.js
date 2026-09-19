@@ -43,17 +43,6 @@ const createInvoice = asyncHandler(async (req, res) => {
     computedTotal += item.amount;
   }
 
-  // Auto-generate sequential invoice number (sort by createdAt for reliability)
-  const lastInvoice = await Billing.findOne({ clientId }).sort({ createdAt: -1 });
-  let invoiceNo = 'INV0001';
-  if (lastInvoice?.invoiceNo) {
-    const match = lastInvoice.invoiceNo.match(/INV(\d+)/);
-    const lastNumber = match ? parseInt(match[1], 10) : 0;
-    if (!Number.isNaN(lastNumber)) {
-      invoiceNo = `INV${String(lastNumber + 1).padStart(4, '0')}`;
-    }
-  }
-
   let parsedCreatedAt;
   if (createdAt !== undefined && createdAt !== null && createdAt !== '') {
     parsedCreatedAt = new Date(createdAt);
@@ -63,8 +52,7 @@ const createInvoice = asyncHandler(async (req, res) => {
     }
   }
 
-  const invoice = new Billing({
-    invoiceNo,
+  const invoiceData = {
     billNumber: billNumber ? String(billNumber).trim() : undefined,
     invoiceDate: date ? new Date(date) : Date.now(),
     customerName: String(customerName).trim(),
@@ -75,18 +63,30 @@ const createInvoice = asyncHandler(async (req, res) => {
     clientId,
     recordedBy: req.user?._id,
     ...(parsedCreatedAt ? { createdAt: parsedCreatedAt } : {}),
-  });
+  };
 
-  try {
-    const createdInvoice = await invoice.save();
-    res.status(201).json(createdInvoice);
-  } catch (err) {
-    if (err.code === 11000) {
-      res.status(409);
-      throw new Error('Invoice number conflict — please retry');
+  // Retry up to 5 times in case of concurrent invoice number collision
+  let createdInvoice;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const [agg] = await Billing.aggregate([
+      { $match: { clientId } },
+      { $project: { num: { $toInt: { $substr: ['$invoiceNo', 3, -1] } } } },
+      { $group: { _id: null, maxNum: { $max: '$num' } } },
+    ]);
+    const nextNum = (agg?.maxNum ?? 0) + 1;
+    const invoiceNo = `INV${String(nextNum).padStart(4, '0')}`;
+
+    const invoice = new Billing({ ...invoiceData, invoiceNo });
+    try {
+      createdInvoice = await invoice.save();
+      break;
+    } catch (err) {
+      if (err.code === 11000 && attempt < 4) continue;
+      throw err;
     }
-    throw err;
   }
+
+  res.status(201).json(createdInvoice);
 });
 
 // @desc    Get all invoices
@@ -100,28 +100,36 @@ const getInvoices = asyncHandler(async (req, res) => {
     throw new Error('Client ID is required');
   }
 
-  const query = { clientId: clientId.trim() };
+  let query = { clientId: clientId.trim() };
 
   if (startDate || endDate) {
-    query.invoiceDate = {};
+    const dateFilter = {};
     if (startDate) {
       const startOfDay = new Date(startDate);
       startOfDay.setHours(0, 0, 0, 0);
-      query.invoiceDate.$gte = startOfDay;
+      dateFilter.$gte = startOfDay;
     }
     if (endDate) {
       const endOfDay = new Date(endDate);
       endOfDay.setHours(23, 59, 59, 999);
-      query.invoiceDate.$lte = endOfDay;
+      dateFilter.$lte = endOfDay;
     }
-  }
-
-  if (customerName) {
-    query.customerName = new RegExp(customerName, 'i');
-  }
-
-  if (status) {
-    query.status = status;
+    const nameFilter = customerName ? { customerName: new RegExp(customerName, 'i') } : {};
+    if (status) {
+      // Explicit status filter: apply date range strictly, no pending override
+      query = { clientId: clientId.trim(), invoiceDate: dateFilter, status, ...nameFilter };
+    } else {
+      // No status filter: always include unpaid/partial invoices from previous months
+      query = {
+        $or: [
+          { clientId: clientId.trim(), invoiceDate: dateFilter, ...nameFilter },
+          { clientId: clientId.trim(), status: { $in: ['draft', 'sent', 'unpaid', 'partial'] }, ...nameFilter },
+        ],
+      };
+    }
+  } else {
+    if (customerName) query.customerName = new RegExp(customerName, 'i');
+    if (status) query.status = status;
   }
 
   const invoices = await Billing.find(query).sort({ invoiceDate: -1 });

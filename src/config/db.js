@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import Stock from '../models/stockModel.js';
+import Billing from '../models/billingModel.js';
 
 dotenv.config();
 
@@ -48,6 +49,19 @@ const connectDB = async () => {
       await Stock.collection.createIndex({ clientId: 1, itemType: 1 }, { unique: true });
     } catch (indexErr) {
       console.error('Stock index initialization error:', indexErr.message || indexErr);
+    }
+
+    // Drop stale single-field unique index on billings.invoiceNo (replaced by compound invoiceNo+clientId)
+    try {
+      const billingIndexes = await Billing.collection.indexes();
+      const staleIndex = billingIndexes.find((idx) => idx?.name === 'invoiceNo_1');
+      if (staleIndex) {
+        await Billing.collection.dropIndex('invoiceNo_1');
+        console.log('Dropped legacy unique index billings.invoiceNo_1');
+      }
+      await Billing.collection.createIndex({ invoiceNo: 1, clientId: 1 }, { unique: true });
+    } catch (indexErr) {
+      console.error('Billing index initialization error:', indexErr.message || indexErr);
     }
   }
 };
