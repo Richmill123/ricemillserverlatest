@@ -491,7 +491,7 @@ const rangeEnd = endDate
       },
     ]),
     Income.aggregate([
-  { $match: yearIncomeMatch },
+  { $match: incomeMatch },
   {
     $group: {
       _id: null,
