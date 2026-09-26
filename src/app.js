@@ -27,6 +27,7 @@ import purchaseRoutes from './routes/purchaseRoutes.js';
 import billingRoutes from './routes/billingRoutes.js';
 import preferenceRoutes from './routes/preferenceRoutes.js';
 import suspenseRoutes from './routes/suspenseRoutes.js';
+import { normalizeRequestClientId } from './utils/clientId.js';
 
 // Load environment variables
 dotenv.config();
@@ -66,6 +67,8 @@ app.use(express.json({
   verify: (req, _res, buf) => { req.rawBody = buf; }
 }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
+
+app.use(normalizeRequestClientId);
 
 // Rate limiting for different endpoint categories
 app.use('/api/admins/login', authRateLimit);
