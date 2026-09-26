@@ -140,7 +140,7 @@ export const validationPatterns = {
   alphanumeric: /^[a-zA-Z0-9\s\-_.,]+$/,
   amount: /^\d+(\.\d{1,2})?$/,
   quantity: /^\d+$/,
-  clientId: /^[a-f\d]{24}$/i
+  clientId: /^[a-zA-Z0-9_-]{2,50}$/
 };
 
 // Security middleware functions

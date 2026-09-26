@@ -78,7 +78,7 @@ router.get('/dashboard',
     query('clientId')
       .notEmpty()
       .withMessage('Client ID is required')
-      .isMongoId()
+      .matches(/^[a-zA-Z0-9_-]{2,50}$/)
       .withMessage('Invalid client ID format'),
     query('startDate')
       .optional()
